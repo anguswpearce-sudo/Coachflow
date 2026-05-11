@@ -7,18 +7,20 @@ import StudentDashboard from './pages/StudentDashboard'
 function App() {
   const [role, setRole] = useState(null)
   const [page, setPage] = useState('login')
+  const [user, setUser] = useState(null)
 
   function handleSignOut() {
     setRole(null)
+    setUser(null)
     setPage('login')
   }
 
   if (role === 'coach') {
-    return <CoachDashboard onSignOut={handleSignOut} />
+    return <CoachDashboard onSignOut={handleSignOut} userId={user} />
   }
 
   if (role === 'student') {
-    return <StudentDashboard onSignOut={handleSignOut} />
+    return <StudentDashboard onSignOut={handleSignOut} userId={user} />
   }
 
   if (page === 'signup') {
@@ -27,7 +29,10 @@ function App() {
 
   return (
     <Login
-      onLogin={setRole}
+      onLogin={(role, userId) => {
+        setRole(role)
+        setUser(userId)
+      }}
       onSwitch={() => setPage('signup')}
     />
   )

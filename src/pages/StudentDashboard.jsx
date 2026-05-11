@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { supabase } from '../supabase'
+import StudentProfile from './StudentProfile'
 
-function StudentDashboard({ onSignOut }) {
+function StudentDashboard({ onSignOut, userId }) {
   const [programmes] = useState([
     {
       name: 'Upper body strength — week 1',
@@ -16,6 +18,7 @@ function StudentDashboard({ onSignOut }) {
 
   const [completedActivities, setCompletedActivities] = useState([])
   const [submitted, setSubmitted] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [notes, setNotes] = useState('')
   const [uploadedVideos, setUploadedVideos] = useState({})
 
@@ -37,7 +40,7 @@ function StudentDashboard({ onSignOut }) {
     setUploadedVideos({ ...uploadedVideos, [key]: file.name })
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (completedActivities.length === 0) {
       alert('Please tick off at least one activity before submitting!')
       return
@@ -45,23 +48,42 @@ function StudentDashboard({ onSignOut }) {
     setSubmitted(true)
   }
 
+  if (showProfile) {
+    return <StudentProfile userId={userId} onBack={() => setShowProfile(false)} />
+  }
+
   return (
     <div style={{ padding: '40px' }}>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>Student Dashboard</h1>
-        <button
-          onClick={onSignOut}
-          style={{
-            padding: '8px 20px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            border: '1px solid #ddd',
-            fontSize: '14px'
-          }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setShowProfile(true)}
+            style={{
+              padding: '8px 20px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #1D9E75',
+              color: '#1D9E75',
+              fontSize: '14px'
+            }}
+          >
+            My profile
+          </button>
+          <button
+            onClick={onSignOut}
+            style={{
+              padding: '8px 20px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #ddd',
+              fontSize: '14px'
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <p>Welcome back, Student!</p>
@@ -158,7 +180,7 @@ function StudentDashboard({ onSignOut }) {
                         id={`video-${progIndex}-${actIndex}`}
                         type="file"
                         accept="video/*"
-capture="camcorder"
+                        capture="camcorder"
                         style={{ display: 'none' }}
                         onChange={(e) => {
                           if (e.target.files[0]) {
@@ -177,7 +199,6 @@ capture="camcorder"
                       )}
                     </div>
                   )}
-
                 </div>
               ))}
             </div>
@@ -216,7 +237,7 @@ capture="camcorder"
                     style={{
                       marginTop: '12px',
                       padding: '10px 25px',
-                        backgroundColor: '#1D9E75',
+                      backgroundColor: '#1D9E75',
                       color: 'white',
                       border: 'none',
                       borderRadius: '8px',
@@ -260,4 +281,4 @@ capture="camcorder"
   )
 }
 
-export default StudentDashboard 
+export default StudentDashboard

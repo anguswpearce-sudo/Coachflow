@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import CoachProfile from './CoachProfile'
 
-function CoachDashboard({ onSignOut }) {
+function CoachDashboard({ onSignOut, userId }) {
   const [showForm, setShowForm] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [programmeName, setProgrammeName] = useState('')
   const [studentName, setStudentName] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -32,23 +34,42 @@ function CoachDashboard({ onSignOut }) {
     setShowForm(false)
   }
 
+  if (showProfile) {
+    return <CoachProfile userId={userId} onBack={() => setShowProfile(false)} />
+  }
+
   return (
     <div style={{ padding: '40px' }}>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>Coach Dashboard</h1>
-        <button
-          onClick={onSignOut}
-          style={{
-            padding: '8px 20px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            border: '1px solid #ddd',
-            fontSize: '14px'
-          }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setShowProfile(true)}
+            style={{
+              padding: '8px 20px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #1D9E75',
+              color: '#1D9E75',
+              fontSize: '14px'
+            }}
+          >
+            My profile
+          </button>
+          <button
+            onClick={onSignOut}
+            style={{
+              padding: '8px 20px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #ddd',
+              fontSize: '14px'
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <p>Welcome back, Coach!</p>

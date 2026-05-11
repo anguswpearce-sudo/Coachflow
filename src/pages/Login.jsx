@@ -32,7 +32,7 @@ function Login({ onLogin, onSwitch }) {
       .single()
 
     if (profile) {
-      onLogin(profile.role)
+      onLogin(profile.role, data.user.id)
     } else {
       alert('Could not find your profile. Please try again!')
     }
