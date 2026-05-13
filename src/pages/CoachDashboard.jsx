@@ -13,11 +13,20 @@ function CoachDashboard({ onSignOut, userId }) {
   const [programmeName, setProgrammeName] = useState('')
   const [studentName, setStudentName] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [activities, setActivities] = useState([])
+  const [newActivityName, setNewActivityName] = useState('')
+  const [newActivityDetail, setNewActivityDetail] = useState('')
+  const [newActivityVideo, setNewActivityVideo] = useState(false)
   const [programmes, setProgrammes] = useState([
     {
       name: 'Upper body strength — week 1',
       student: 'Jamie Chen',
       due: '15 May 2026',
+      activities: [
+        { name: 'Push-ups', detail: '3 sets x 15 reps', requiresVideo: true },
+        { name: 'Dumbbell rows', detail: '3 sets x 12 reps', requiresVideo: true },
+        { name: 'Plank hold', detail: '3 x 45 seconds', requiresVideo: false },
+      ]
     }
   ])
 
@@ -30,11 +39,16 @@ function CoachDashboard({ onSignOut, userId }) {
       name: programmeName,
       student: studentName,
       due: dueDate,
+      activities: activities,
     }
     setProgrammes([...programmes, newProgramme])
     setProgrammeName('')
     setStudentName('')
     setDueDate('')
+    setActivities([])
+    setNewActivityName('')
+    setNewActivityDetail('')
+    setNewActivityVideo(false)
     setShowForm(false)
   }
 
@@ -183,7 +197,7 @@ function CoachDashboard({ onSignOut, userId }) {
             <div>
               <div style={{ fontWeight: '600', fontSize: '15px' }}>{programme.name}</div>
               <div style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
-                👤 {programme.student} · 📅 Due {programme.due}
+                👤 {programme.student} · 📅 Due {programme.due || 'No date set'} · {programme.activities?.length || 0} activities
               </div>
             </div>
             <button
@@ -242,7 +256,7 @@ function CoachDashboard({ onSignOut, userId }) {
               />
             </div>
 
-            <div style={{ marginBottom: '24px' }}>
+            <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
                 Due date
               </label>
@@ -253,6 +267,104 @@ function CoachDashboard({ onSignOut, userId }) {
                 onChange={(e) => setDueDate(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
               />
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '10px' }}>
+                Activities
+              </label>
+
+              {activities.map((act, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 14px',
+                  backgroundColor: '#f9f9f9',
+                  borderRadius: '8px',
+                  marginBottom: '8px',
+                  fontSize: '14px'
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: '500' }}>{act.name}</span>
+                    <span style={{ color: '#888', marginLeft: '8px' }}>{act.detail}</span>
+                    {act.requiresVideo && <span style={{ marginLeft: '8px', fontSize: '12px', color: '#854F0B' }}>📹 video required</span>}
+                  </div>
+                  <button
+                    onClick={() => setActivities(activities.filter((_, idx) => idx !== i))}
+                    style={{
+                      padding: '3px 10px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      borderRadius: '6px',
+                      border: '1px solid #ffcccc',
+                      backgroundColor: '#fff5f5',
+                      color: '#cc0000'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+
+              <div style={{
+                padding: '14px',
+                border: '1px dashed #ddd',
+                borderRadius: '10px',
+                marginTop: '8px'
+              }}>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="Activity name e.g. Push-ups"
+                    value={newActivityName}
+                    onChange={(e) => setNewActivityName(e.target.value)}
+                    style={{ flex: 1, padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Detail e.g. 3 x 15 reps"
+                    value={newActivityDetail}
+                    onChange={(e) => setNewActivityDetail(e.target.value)}
+                    style={{ flex: 1, padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#666', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={newActivityVideo}
+                      onChange={(e) => setNewActivityVideo(e.target.checked)}
+                    />
+                    Require video submission
+                  </label>
+                  <button
+                    onClick={() => {
+                      if (newActivityName.trim() === '') return
+                      setActivities([...activities, {
+                        name: newActivityName.trim(),
+                        detail: newActivityDetail.trim(),
+                        requiresVideo: newActivityVideo
+                      }])
+                      setNewActivityName('')
+                      setNewActivityDetail('')
+                      setNewActivityVideo(false)
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#1D9E75',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    + Add activity
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>

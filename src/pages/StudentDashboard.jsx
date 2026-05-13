@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { supabase } from '../supabase'
 import StudentProfile from './StudentProfile'
 
 function StudentDashboard({ onSignOut, userId }) {
@@ -40,7 +39,7 @@ function StudentDashboard({ onSignOut, userId }) {
     setUploadedVideos({ ...uploadedVideos, [key]: file.name })
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (completedActivities.length === 0) {
       alert('Please tick off at least one activity before submitting!')
       return
@@ -53,20 +52,37 @@ function StudentDashboard({ onSignOut, userId }) {
   }
 
   return (
-    <div style={{ padding: '40px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5' }}>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Student Dashboard</h1>
-        <div style={{ display: 'flex', gap: '10px' }}>
+      {/* Navbar */}
+      <div style={{
+        backgroundColor: 'white',
+        borderBottom: '1px solid #eeeeee',
+        padding: '0 32px',
+        height: '60px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100
+      }}>
+        <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>
+          <span style={{ color: '#1D9E75' }}>coach</span>
+          <span style={{ color: '#1a1a1a' }}>flow</span>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             onClick={() => setShowProfile(true)}
             style={{
-              padding: '8px 20px',
+              padding: '8px 18px',
               cursor: 'pointer',
               borderRadius: '8px',
               border: '1px solid #1D9E75',
               color: '#1D9E75',
-              fontSize: '14px'
+              fontSize: '13px',
+              fontWeight: '500',
+              backgroundColor: 'white'
             }}
           >
             My profile
@@ -74,11 +90,14 @@ function StudentDashboard({ onSignOut, userId }) {
           <button
             onClick={onSignOut}
             style={{
-              padding: '8px 20px',
+              padding: '8px 18px',
               cursor: 'pointer',
               borderRadius: '8px',
-              border: '1px solid #ddd',
-              fontSize: '14px'
+              border: '1px solid #eee',
+              color: '#666',
+              fontSize: '13px',
+              fontWeight: '500',
+              backgroundColor: 'white'
             }}
           >
             Sign out
@@ -86,34 +105,86 @@ function StudentDashboard({ onSignOut, userId }) {
         </div>
       </div>
 
-      <p>Welcome back, Student!</p>
+      {/* Content */}
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
 
-      <div style={{ marginTop: '30px' }}>
-        <h2>My Programmes</h2>
+        <div style={{ marginBottom: '28px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px' }}>
+            My Training
+          </h1>
+          <p style={{ color: '#888', marginTop: '4px', fontSize: '15px' }}>
+            Complete your programmes and submit to your coach
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
+          {[
+            { label: 'Programmes', value: programmes.length, emoji: '📋' },
+            { label: 'Activities done', value: completedActivities.length, emoji: '✅' },
+            { label: 'Submitted', value: submitted ? '1' : '0', emoji: '📤' },
+          ].map((stat, i) => (
+            <div key={i} style={{
+              backgroundColor: 'white',
+              borderRadius: '14px',
+              padding: '20px',
+              border: '1px solid #eee',
+            }}>
+              <div style={{ fontSize: '22px', marginBottom: '8px' }}>{stat.emoji}</div>
+              <div style={{ fontSize: '26px', fontWeight: '700' }}>{stat.value}</div>
+              <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>My Programmes</h2>
 
         {programmes.map((programme, progIndex) => (
           <div key={progIndex} style={{
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            padding: '20px',
-            marginTop: '15px',
-            maxWidth: '600px'
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '16px',
+            border: '1px solid #eee',
           }}>
-            <h3>{programme.name}</h3>
-            <p style={{ color: '#666' }}>From: {programme.coach} · Due: {programme.due}</p>
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: '600' }}>{programme.name}</h3>
+              <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+                👤 {programme.coach} · 📅 Due {programme.due}
+              </p>
+            </div>
 
-            <div style={{ marginTop: '15px' }}>
-              <h4>Activities</h4>
+            {/* Progress bar */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#666' }}>Progress</span>
+                <span style={{ fontSize: '13px', fontWeight: '500', color: '#1D9E75' }}>
+                  {completedActivities.filter(k => k.startsWith(`${progIndex}-`)).length} of {programme.activities.length} activities
+                </span>
+              </div>
+              <div style={{ height: '6px', backgroundColor: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  backgroundColor: '#1D9E75',
+                  borderRadius: '3px',
+                  width: `${(completedActivities.filter(k => k.startsWith(`${progIndex}-`)).length / programme.activities.length) * 100}%`,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
 
+            {/* Activities */}
+            <div style={{ marginBottom: '20px' }}>
               {programme.activities.map((activity, actIndex) => (
                 <div
                   key={actIndex}
                   style={{
-                    padding: '12px',
-                    marginTop: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
+                    padding: '14px',
+                    marginBottom: '8px',
+                    border: `1px solid ${isCompleted(progIndex, actIndex) ? '#1D9E75' : '#eee'}`,
+                    borderRadius: '12px',
                     backgroundColor: isCompleted(progIndex, actIndex) ? '#f0fdf4' : 'white',
+                    transition: 'all 0.15s'
                   }}
                 >
                   <div
@@ -126,24 +197,25 @@ function StudentDashboard({ onSignOut, userId }) {
                     }}
                   >
                     <div style={{
-                      width: '24px',
-                      height: '24px',
+                      width: '26px',
+                      height: '26px',
                       borderRadius: '50%',
-                      border: '2px solid #1D9E75',
+                      border: `2px solid ${isCompleted(progIndex, actIndex) ? '#1D9E75' : '#ddd'}`,
                       backgroundColor: isCompleted(progIndex, actIndex) ? '#1D9E75' : 'white',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      flexShrink: 0
+                      flexShrink: 0,
+                      transition: 'all 0.15s'
                     }}>
                       {isCompleted(progIndex, actIndex) && (
-                        <span style={{ color: 'white', fontSize: '14px' }}>✓</span>
+                        <span style={{ color: 'white', fontSize: '13px' }}>✓</span>
                       )}
                     </div>
 
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '500' }}>{activity.name}</div>
-                      <div style={{ fontSize: '13px', color: '#666' }}>{activity.detail}</div>
+                      <div style={{ fontWeight: '500', fontSize: '14px' }}>{activity.name}</div>
+                      <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{activity.detail}</div>
                     </div>
 
                     {activity.requiresVideo && (
@@ -151,8 +223,9 @@ function StudentDashboard({ onSignOut, userId }) {
                         fontSize: '11px',
                         backgroundColor: '#FAEEDA',
                         color: '#854F0B',
-                        padding: '3px 8px',
-                        borderRadius: '6px'
+                        padding: '3px 10px',
+                        borderRadius: '20px',
+                        fontWeight: '500'
                       }}>
                         📹 video required
                       </span>
@@ -160,18 +233,21 @@ function StudentDashboard({ onSignOut, userId }) {
                   </div>
 
                   {activity.requiresVideo && isCompleted(progIndex, actIndex) && !submitted && (
-                    <div style={{ marginTop: '10px', paddingLeft: '36px' }}>
+                    <div style={{ marginTop: '12px', paddingLeft: '38px' }}>
                       <label
                         htmlFor={`video-${progIndex}-${actIndex}`}
                         style={{
-                          display: 'inline-block',
-                          padding: '6px 16px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 16px',
                           backgroundColor: 'white',
                           border: '1px solid #1D9E75',
-                          borderRadius: '6px',
+                          borderRadius: '8px',
                           cursor: 'pointer',
                           fontSize: '13px',
-                          color: '#1D9E75'
+                          color: '#1D9E75',
+                          fontWeight: '500'
                         }}
                       >
                         📹 Film or choose video
@@ -189,11 +265,7 @@ function StudentDashboard({ onSignOut, userId }) {
                         }}
                       />
                       {uploadedVideos[`${progIndex}-${actIndex}`] && (
-                        <p style={{
-                          marginTop: '6px',
-                          fontSize: '12px',
-                          color: '#1D9E75'
-                        }}>
+                        <p style={{ marginTop: '6px', fontSize: '12px', color: '#1D9E75' }}>
                           ✅ {uploadedVideos[`${progIndex}-${actIndex}`]} ready to submit
                         </p>
                       )}
@@ -203,77 +275,61 @@ function StudentDashboard({ onSignOut, userId }) {
               ))}
             </div>
 
-            <div style={{ marginTop: '20px' }}>
-              <p style={{ fontSize: '13px', color: '#666' }}>
-                {completedActivities.filter(k => k.startsWith(`${progIndex}-`)).length} of {programme.activities.length} activities completed
-              </p>
-
-              {!submitted ? (
-                <div>
-                  <div style={{ marginTop: '12px' }}>
-                    <label style={{ fontSize: '14px', fontWeight: '500' }}>
-                      Notes for your coach
-                    </label>
-                    <br />
-                    <textarea
-                      placeholder="How did the session go? Any questions for your coach..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      style={{
-                        marginTop: '6px',
-                        width: '100%',
-                        padding: '10px',
-                        fontSize: '14px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        minHeight: '80px',
-                        resize: 'vertical'
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleSubmit}
+            {!submitted ? (
+              <div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
+                    Notes for your coach
+                  </label>
+                  <textarea
+                    placeholder="How did the session go? Any questions for your coach..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                     style={{
-                      marginTop: '12px',
-                      padding: '10px 25px',
-                      backgroundColor: '#1D9E75',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
+                      width: '100%',
+                      padding: '12px 14px',
+                      fontSize: '14px',
+                      borderRadius: '10px',
+                      border: '1px solid #eee',
+                      minHeight: '80px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      fontFamily: 'Inter, sans-serif'
                     }}
-                  >
-                    Submit to coach
-                  </button>
+                  />
                 </div>
-              ) : (
-                <div style={{
-                  marginTop: '15px',
-                  padding: '16px 20px',
-                  backgroundColor: '#f0fdf4',
-                  border: '1px solid #1D9E75',
-                  borderRadius: '8px',
-                }}>
-                  <p style={{
-                    color: '#1D9E75',
-                    fontWeight: '500',
-                    fontSize: '15px',
-                    margin: '0'
-                  }}>
-                    ✅ Submitted to Coach Sarah!
-                  </p>
-                  <p style={{
-                    color: '#666',
-                    fontSize: '13px',
-                    marginTop: '6px'
-                  }}>
-                    Your coach will review your work and get back to you soon.
-                  </p>
-                </div>
-              )}
-            </div>
+
+                <button
+                  onClick={handleSubmit}
+                  style={{
+                    padding: '11px 28px',
+                    backgroundColor: '#1D9E75',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Submit to coach →
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                padding: '16px 20px',
+                backgroundColor: '#E1F5EE',
+                border: '1px solid #1D9E75',
+                borderRadius: '12px',
+              }}>
+                <p style={{ color: '#0F6E56', fontWeight: '600', fontSize: '15px', margin: '0' }}>
+                  ✅ Submitted to {programme.coach}!
+                </p>
+                <p style={{ color: '#666', fontSize: '13px', marginTop: '6px' }}>
+                  Your coach will review your work and get back to you soon.
+                </p>
+              </div>
+            )}
           </div>
         ))}
       </div>
