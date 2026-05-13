@@ -1,11 +1,117 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
-  color: #333;
-  background-color: #fff;
+.btn-primary {
+  background-color: #1D9E75;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #178a64;
+}
+
+.btn-secondary {
+  background-color: white;
+  color: #1a1a1a;
+  border: 1px solid #e5e5e5;
+}
+
+.btn-secondary:hover {
+  background-color: #f5f5f5;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #eeeeee;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  color: #1a1a1a;
+  transition: border 0.15s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #1D9E75;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 5px;
+  display: block;
+}
+
+.page-container {
+  min-height: 100vh;
+  background-color: #F7F7F5;
+}
+
+.navbar {
+  background: white;
+  border-bottom: 1px solid #eeeeee;
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1D9E75;
+  letter-spacing: -0.5px;
+}
+
+.navbar-logo span {
+  color: #1a1a1a;
+}
+
+.content-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-green {
+  background: #E1F5EE;
+  color: #0F6E56;
+}
+
+.badge-amber {
+  background: #FAEEDA;
+  color: #854F0B;
 }
