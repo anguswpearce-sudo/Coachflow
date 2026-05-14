@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../supabase'
 import CoachProfile from './CoachProfile'
 import ProgrammeDetail from './ProgrammeDetail'
 import StudentsPage from './StudentsPage'
@@ -30,18 +31,36 @@ function CoachDashboard({ onSignOut, userId }) {
     }
   ])
 
-  function handleCreate() {
+  async function handleCreate() {
     if (programmeName === '' || studentName === '') {
       alert('Please fill in the programme name and student name!')
       return
     }
+
     const newProgramme = {
+      coach_id: userId,
+      student_email: studentName,
+      name: programmeName,
+      due_date: dueDate,
+      activities: activities,
+    }
+
+    const { error } = await supabase
+      .from('programmes')
+      .insert([newProgramme])
+
+    if (error) {
+      alert('Error saving programme: ' + error.message)
+      return
+    }
+
+    setProgrammes([...programmes, {
       name: programmeName,
       student: studentName,
       due: dueDate,
       activities: activities,
-    }
-    setProgrammes([...programmes, newProgramme])
+    }])
+
     setProgrammeName('')
     setStudentName('')
     setDueDate('')
@@ -245,11 +264,11 @@ function CoachDashboard({ onSignOut, userId }) {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
-                Student name
+                Student email
               </label>
               <input
                 type="text"
-                placeholder="e.g. Jamie Chen"
+                placeholder="Student's email e.g. student@gmail.com"
                 value={studentName}
                 onChange={(e) => setStudentName(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
