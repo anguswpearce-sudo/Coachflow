@@ -1,31 +1,47 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 
-const initialSubmissions = [
-  {
-    id: 1,
-    student: 'Jamie Chen',
-    programme: 'Upper body strength — week 1',
-    date: '10 May 2026',
-    notes: 'Felt really strong today! Push-ups were tough on the last set but got through them all.',
-    videos: ['pushups_video.mp4', 'rows_video.mp4'],
-    reviewed: false,
-  },
-  {
-    id: 2,
-    student: 'Sam Patel',
-    programme: 'Mobility & flexibility circuit',
-    date: '9 May 2026',
-    notes: 'All done! The hip flexor stretch was really challenging.',
-    videos: ['mobility_video.mp4'],
-    reviewed: false,
-  },
-]
-
-function SubmissionsPage({ onBack }) {
-  const [submissions, setSubmissions] = useState(initialSubmissions)
+function SubmissionsPage({ onBack, userId }) {
+  const [submissions, setSubmissions] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('inbox')
 
-  function markReviewed(id) {
+  useEffect(() => {
+    loadSubmissions()
+  }, [])
+
+  async function loadSubmissions() {
+    const { data, error } = await supabase
+      .from('submissions')
+      .select(`
+        *,
+        programmes (
+          name,
+          student_email,
+          activities
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading submissions:', error)
+    } else {
+      setSubmissions(data || [])
+    }
+    setLoading(false)
+  }
+
+  async function markReviewed(id) {
+    const { error } = await supabase
+      .from('submissions')
+      .update({ reviewed: true })
+      .eq('id', id)
+
+    if (error) {
+      alert('Error updating submission: ' + error.message)
+      return
+    }
+
     setSubmissions(submissions.map(s =>
       s.id === id ? { ...s, reviewed: true } : s
     ))
@@ -35,10 +51,17 @@ function SubmissionsPage({ onBack }) {
   const completed = submissions.filter(s => s.reviewed)
   const showing = filter === 'inbox' ? inbox : completed
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '15px', color: '#888' }}>Loading submissions...</div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5' }}>
 
-      {/* Navbar */}
       <div style={{
         backgroundColor: 'white',
         borderBottom: '1px solid #eeeeee',
@@ -81,7 +104,6 @@ function SubmissionsPage({ onBack }) {
           </p>
         </div>
 
-        {/* Tabs */}
         <div style={{
           display: 'flex',
           gap: '4px',
@@ -115,7 +137,6 @@ function SubmissionsPage({ onBack }) {
           ))}
         </div>
 
-        {/* Submissions list */}
         {showing.length === 0 ? (
           <div style={{
             textAlign: 'center',
@@ -139,9 +160,11 @@ function SubmissionsPage({ onBack }) {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
-                  <div style={{ fontWeight: '600', fontSize: '16px' }}>{submission.student}</div>
+                  <div style={{ fontWeight: '600', fontSize: '16px' }}>
+                    {submission.programmes?.student_email || 'Unknown student'}
+                  </div>
                   <div style={{ fontSize: '13px', color: '#888', marginTop: '3px' }}>
-                    📋 {submission.programme} · 📅 {submission.date}
+                    📋 {submission.programmes?.name} · 📅 {new Date(submission.created_at).toLocaleDateString()}
                   </div>
                 </div>
                 <span style={{
@@ -156,45 +179,36 @@ function SubmissionsPage({ onBack }) {
                 </span>
               </div>
 
-              <div style={{
-                backgroundColor: '#F7F7F5',
-                borderRadius: '10px',
-                padding: '14px',
-                fontSize: '14px',
-                color: '#444',
-                lineHeight: '1.6',
-                marginBottom: '16px'
-              }}>
-                "{submission.notes}"
-              </div>
+              {submission.notes && (
+                <div style={{
+                  backgroundColor: '#F7F7F5',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  fontSize: '14px',
+                  color: '#444',
+                  lineHeight: '1.6',
+                  marginBottom: '16px'
+                }}>
+                  "{submission.notes}"
+                </div>
+              )}
 
-              {submission.videos.length > 0 && (
+              {submission.programmes?.activities && submission.completed_activities && (
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>
-                    📹 Video submissions
+                    Activities completed:
                   </div>
-                  {submission.videos.map((video, i) => (
+                  {submission.programmes.activities.map((act, i) => (
                     <div key={i} style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '10px 14px',
-                      backgroundColor: '#F7F7F5',
-                      borderRadius: '8px',
-                      marginBottom: '6px',
-                      fontSize: '13px'
+                      gap: '8px',
+                      fontSize: '13px',
+                      padding: '6px 0',
+                      color: submission.completed_activities.includes(i) ? '#0F6E56' : '#aaa'
                     }}>
-                      <span>📹 {video}</span>
-                      <button style={{
-                        padding: '4px 12px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        borderRadius: '6px',
-                        border: '1px solid #eee',
-                        backgroundColor: 'white'
-                      }}>
-                        View
-                      </button>
+                      <span>{submission.completed_activities.includes(i) ? '✅' : '⬜'}</span>
+                      <span>{act.name} — {act.detail}</span>
                     </div>
                   ))}
                 </div>

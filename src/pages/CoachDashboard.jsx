@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import CoachProfile from './CoachProfile'
 import ProgrammeDetail from './ProgrammeDetail'
@@ -16,27 +16,37 @@ function CoachDashboard({ onSignOut, userId }) {
   const [dueDate, setDueDate] = useState('')
   const [activities, setActivities] = useState([])
   const [newActivityName, setNewActivityName] = useState('')
-  const [newActivityDetail, setNewActivityDetail] = useState('')
+  const [newActivitySets, setNewActivitySets] = useState('3')
+  const [newActivityReps, setNewActivityReps] = useState('10')
+  const [newActivityDuration, setNewActivityDuration] = useState('')
+  const [newActivityRepType, setNewActivityRepType] = useState('reps')
   const [newActivityVideo, setNewActivityVideo] = useState(false)
-  const [programmes, setProgrammes] = useState([
-    {
-      name: 'Upper body strength — week 1',
-      student: 'Jamie Chen',
-      due: '15 May 2026',
-      activities: [
-        { name: 'Push-ups', detail: '3 sets x 15 reps', requiresVideo: true },
-        { name: 'Dumbbell rows', detail: '3 sets x 12 reps', requiresVideo: true },
-        { name: 'Plank hold', detail: '3 x 45 seconds', requiresVideo: false },
-      ]
+  const [programmes, setProgrammes] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadProgrammes()
+  }, [])
+
+  async function loadProgrammes() {
+    const { data, error } = await supabase
+      .from('programmes')
+      .select('*')
+      .eq('coach_id', userId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('Error loading programmes:', error)
+    } else {
+      setProgrammes(data || [])
     }
-  ])
+    setLoading(false)
+  }
 
   async function handleCreate() {
     if (programmeName === '' || studentName === '') {
-      alert('Please fill in the programme name and student name!')
+      alert('Please fill in the programme name and student email!')
       return
     }
-
     const newProgramme = {
       coach_id: userId,
       student_email: studentName,
@@ -44,47 +54,72 @@ function CoachDashboard({ onSignOut, userId }) {
       due_date: dueDate,
       activities: activities,
     }
-
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('programmes')
       .insert([newProgramme])
-
+      .select()
     if (error) {
       alert('Error saving programme: ' + error.message)
       return
     }
-
-    setProgrammes([...programmes, {
-      name: programmeName,
-      student: studentName,
-      due: dueDate,
-      activities: activities,
-    }])
-
+    setProgrammes([data[0], ...programmes])
     setProgrammeName('')
     setStudentName('')
     setDueDate('')
     setActivities([])
     setNewActivityName('')
-    setNewActivityDetail('')
+    setNewActivitySets('3')
+    setNewActivityReps('10')
+    setNewActivityDuration('')
+    setNewActivityRepType('reps')
     setNewActivityVideo(false)
     setShowForm(false)
+  }
+
+  function addActivity() {
+    if (newActivityName.trim() === '') {
+      alert('Please enter an activity name!')
+      return
+    }
+    let detail = ''
+    if (newActivityRepType === 'reps') {
+      detail = `${newActivitySets} sets × ${newActivityReps} reps`
+    } else if (newActivityRepType === 'amrap') {
+      detail = `${newActivitySets} sets × AMRAP`
+    } else if (newActivityRepType === 'time') {
+      detail = `${newActivitySets} sets × ${newActivityDuration}`
+    }
+    setActivities([...activities, {
+      name: newActivityName.trim(),
+      detail: detail,
+      requiresVideo: newActivityVideo
+    }])
+    setNewActivityName('')
+    setNewActivitySets('3')
+    setNewActivityReps('10')
+    setNewActivityDuration('')
+    setNewActivityRepType('reps')
+    setNewActivityVideo(false)
   }
 
   if (showProfile) {
     return <CoachProfile userId={userId} onBack={() => setShowProfile(false)} />
   }
-
   if (selectedProgramme) {
     return <ProgrammeDetail programme={selectedProgramme} onBack={() => setSelectedProgramme(null)} />
   }
-
   if (showStudents) {
     return <StudentsPage onBack={() => setShowStudents(false)} />
   }
-
   if (showSubmissions) {
-    return <SubmissionsPage onBack={() => setShowSubmissions(false)} />
+    return <SubmissionsPage onBack={() => setShowSubmissions(false)} userId={userId} />
+  }
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '15px', color: '#888' }}>Loading your dashboard...</div>
+      </div>
+    )
   }
 
   return (
@@ -143,19 +178,15 @@ function CoachDashboard({ onSignOut, userId }) {
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
 
         <div style={{ marginBottom: '28px' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px' }}>
-            Coach Dashboard
-          </h1>
-          <p style={{ color: '#888', marginTop: '4px', fontSize: '15px' }}>
-            Manage your programmes and students
-          </p>
+          <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px' }}>Coach Dashboard</h1>
+          <p style={{ color: '#888', marginTop: '4px', fontSize: '15px' }}>Manage your programmes and students</p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
           {[
             { label: 'Active programmes', value: programmes.length, emoji: '📋', onClick: null },
-            { label: 'Students', value: '4', emoji: '👥', onClick: () => setShowStudents(true) },
-            { label: 'Submissions', value: '2', emoji: '📥', onClick: () => setShowSubmissions(true) },
+            { label: 'Students', value: new Set(programmes.map(p => p.student_email)).size, emoji: '👥', onClick: () => setShowStudents(true) },
+            { label: 'Submissions', value: '0', emoji: '📥', onClick: () => setShowSubmissions(true) },
           ].map((stat, i) => (
             <div
               key={i}
@@ -166,17 +197,12 @@ function CoachDashboard({ onSignOut, userId }) {
                 padding: '20px',
                 border: '1px solid #eee',
                 cursor: stat.onClick ? 'pointer' : 'default',
-                transition: 'all 0.15s',
               }}
             >
               <div style={{ fontSize: '22px', marginBottom: '8px' }}>{stat.emoji}</div>
               <div style={{ fontSize: '26px', fontWeight: '700' }}>{stat.value}</div>
               <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{stat.label}</div>
-              {stat.onClick && (
-                <div style={{ fontSize: '12px', color: '#1D9E75', marginTop: '6px', fontWeight: '500' }}>
-                  View all →
-                </div>
-              )}
+              {stat.onClick && <div style={{ fontSize: '12px', color: '#1D9E75', marginTop: '6px', fontWeight: '500' }}>View all →</div>}
             </div>
           ))}
         </div>
@@ -202,8 +228,22 @@ function CoachDashboard({ onSignOut, userId }) {
           )}
         </div>
 
+        {programmes.length === 0 && !showForm && (
+          <div style={{
+            textAlign: 'center',
+            padding: '60px',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            border: '1px solid #eee',
+            color: '#888',
+            fontSize: '15px'
+          }}>
+            📋 No programmes yet — click + New programme to get started!
+          </div>
+        )}
+
         {programmes.map((programme, index) => (
-          <div key={index} style={{
+          <div key={programme.id || index} style={{
             backgroundColor: 'white',
             borderRadius: '14px',
             padding: '20px 24px',
@@ -216,7 +256,7 @@ function CoachDashboard({ onSignOut, userId }) {
             <div>
               <div style={{ fontWeight: '600', fontSize: '15px' }}>{programme.name}</div>
               <div style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
-                👤 {programme.student} · 📅 Due {programme.due || 'No date set'} · {programme.activities?.length || 0} activities
+                👤 {programme.student_email} · 📅 Due {programme.due_date || 'No date set'} · {programme.activities?.length || 0} activities
               </div>
             </div>
             <button
@@ -245,14 +285,10 @@ function CoachDashboard({ onSignOut, userId }) {
             border: '1px solid #eee',
             marginTop: '16px'
           }}>
-            <h3 style={{ fontSize: '17px', fontWeight: '600', marginBottom: '20px' }}>
-              Create new programme
-            </h3>
+            <h3 style={{ fontSize: '17px', fontWeight: '600', marginBottom: '20px' }}>Create new programme</h3>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
-                Programme name
-              </label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>Programme name</label>
               <input
                 type="text"
                 placeholder="e.g. Upper body strength week 2"
@@ -263,9 +299,7 @@ function CoachDashboard({ onSignOut, userId }) {
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
-                Student email
-              </label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>Student email</label>
               <input
                 type="text"
                 placeholder="Student's email e.g. student@gmail.com"
@@ -276,12 +310,9 @@ function CoachDashboard({ onSignOut, userId }) {
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>
-                Due date
-              </label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>Due date</label>
               <input
-                type="text"
-                placeholder="e.g. 20 May 2026"
+                type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
@@ -289,9 +320,7 @@ function CoachDashboard({ onSignOut, userId }) {
             </div>
 
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '10px' }}>
-                Activities
-              </label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#666', marginBottom: '10px' }}>Activities</label>
 
               {activities.map((act, i) => (
                 <div key={i} style={{
@@ -327,27 +356,99 @@ function CoachDashboard({ onSignOut, userId }) {
               ))}
 
               <div style={{
-                padding: '14px',
+                padding: '16px',
                 border: '1px dashed #ddd',
                 borderRadius: '10px',
-                marginTop: '8px'
+                marginTop: '8px',
+                backgroundColor: '#fafafa'
               }}>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Activity name</label>
                   <input
                     type="text"
-                    placeholder="Activity name e.g. Push-ups"
+                    placeholder="e.g. Push-ups, Squats, Plank hold..."
                     value={newActivityName}
                     onChange={(e) => setNewActivityName(e.target.value)}
-                    style={{ flex: 1, padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Detail e.g. 3 x 15 reps"
-                    value={newActivityDetail}
-                    onChange={(e) => setNewActivityDetail(e.target.value)}
-                    style={{ flex: 1, padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none', backgroundColor: 'white' }}
                   />
                 </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Sets</label>
+                    <select
+                      value={newActivitySets}
+                      onChange={(e) => setNewActivitySets(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none', backgroundColor: 'white' }}
+                    >
+                      {Array.from({length: 10}, (_, i) => i + 1).map(n => (
+                        <option key={n} value={n}>{n} set{n > 1 ? 's' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Type</label>
+                    <select
+                      value={newActivityRepType}
+                      onChange={(e) => setNewActivityRepType(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none', backgroundColor: 'white' }}
+                    >
+                      <option value="reps">Reps</option>
+                      <option value="amrap">AMRAP</option>
+                      <option value="time">Time</option>
+                    </select>
+                  </div>
+
+                  {newActivityRepType === 'reps' && (
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Reps</label>
+                      <select
+                        value={newActivityReps}
+                        onChange={(e) => setNewActivityReps(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none', backgroundColor: 'white' }}
+                      >
+                        {Array.from({length: 20}, (_, i) => i + 1).map(n => (
+                          <option key={n} value={n}>{n} rep{n > 1 ? 's' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {newActivityRepType === 'time' && (
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Duration</label>
+                      <select
+                        value={newActivityDuration}
+                        onChange={(e) => setNewActivityDuration(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #eee', borderRadius: '8px', fontSize: '13px', outline: 'none', backgroundColor: 'white' }}
+                      >
+                        <option value="">Select...</option>
+                        {['15 sec','20 sec','30 sec','45 sec','1 min','90 sec','2 min','3 min','5 min','10 min','15 min','20 min','30 min'].map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {newActivityRepType === 'amrap' && (
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingBottom: '1px' }}>
+                      <div style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        backgroundColor: '#E1F5EE',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        color: '#0F6E56',
+                        fontWeight: '500',
+                        textAlign: 'center'
+                      }}>
+                        As many reps as possible
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#666', cursor: 'pointer' }}>
                     <input
@@ -358,17 +459,7 @@ function CoachDashboard({ onSignOut, userId }) {
                     Require video submission
                   </label>
                   <button
-                    onClick={() => {
-                      if (newActivityName.trim() === '') return
-                      setActivities([...activities, {
-                        name: newActivityName.trim(),
-                        detail: newActivityDetail.trim(),
-                        requiresVideo: newActivityVideo
-                      }])
-                      setNewActivityName('')
-                      setNewActivityDetail('')
-                      setNewActivityVideo(false)
-                    }}
+                    onClick={addActivity}
                     style={{
                       padding: '8px 16px',
                       backgroundColor: '#1D9E75',
