@@ -204,7 +204,7 @@ function StudentProfile({ userId, onBack }) {
               fontSize: '13px',
               color: '#666'
             }}>
-              🔗 Share your profile: <strong>coachflow-six.vercel.app/student/{profile?.name?.toLowerCase().replace(/ /g, '-') || 'your-name'}</strong>
+           🔗 Share your profile: <strong>{window.location.origin}/student/{userId}</strong>
             </div>
           </div>
         )}
