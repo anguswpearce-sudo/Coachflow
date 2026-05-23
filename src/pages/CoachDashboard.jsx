@@ -4,12 +4,14 @@ import CoachProfile from './CoachProfile'
 import ProgrammeDetail from './ProgrammeDetail'
 import StudentsPage from './StudentsPage'
 import SubmissionsPage from './SubmissionsPage'
+import MessagesPage from './MessagesPage'
 
 function CoachDashboard({ onSignOut, userId }) {
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showStudents, setShowStudents] = useState(false)
   const [showSubmissions, setShowSubmissions] = useState(false)
+  const [showMessages, setShowMessages] = useState(false)
   const [selectedProgramme, setSelectedProgramme] = useState(null)
   const [programmeName, setProgrammeName] = useState('')
   const [studentName, setStudentName] = useState('')
@@ -114,6 +116,9 @@ function CoachDashboard({ onSignOut, userId }) {
   if (showSubmissions) {
     return <SubmissionsPage onBack={() => setShowSubmissions(false)} userId={userId} />
   }
+  if (showMessages) {
+    return <MessagesPage userId={userId} role="coach" onBack={() => setShowMessages(false)} />
+  }
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -142,6 +147,21 @@ function CoachDashboard({ onSignOut, userId }) {
           <span style={{ color: '#1a1a1a' }}>flow</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={() => setShowMessages(true)}
+            style={{
+              padding: '8px 18px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #eee',
+              color: '#555',
+              fontSize: '13px',
+              fontWeight: '500',
+              backgroundColor: 'white'
+            }}
+          >
+            💬 Messages
+          </button>
           <button
             onClick={() => setShowProfile(true)}
             style={{

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import StudentProfile from './StudentProfile'
+import MessagesPage from './MessagesPage'
 
 function StudentDashboard({ onSignOut, userId }) {
   const [programmes, setProgrammes] = useState([])
@@ -8,6 +9,7 @@ function StudentDashboard({ onSignOut, userId }) {
   const [completedActivities, setCompletedActivities] = useState({})
   const [submitted, setSubmitted] = useState({})
   const [showProfile, setShowProfile] = useState(false)
+  const [showMessages, setShowMessages] = useState(false)
   const [notes, setNotes] = useState({})
   const [uploadedVideos, setUploadedVideos] = useState({})
 
@@ -84,6 +86,9 @@ function StudentDashboard({ onSignOut, userId }) {
   if (showProfile) {
     return <StudentProfile userId={userId} onBack={() => setShowProfile(false)} />
   }
+  if (showMessages) {
+    return <MessagesPage userId={userId} role="student" onBack={() => setShowMessages(false)} />
+  }
 
   if (loading) {
     return (
@@ -113,6 +118,21 @@ function StudentDashboard({ onSignOut, userId }) {
           <span style={{ color: '#1a1a1a' }}>flow</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={() => setShowMessages(true)}
+            style={{
+              padding: '8px 18px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              border: '1px solid #eee',
+              color: '#555',
+              fontSize: '13px',
+              fontWeight: '500',
+              backgroundColor: 'white'
+            }}
+          >
+            💬 Messages
+          </button>
           <button
             onClick={() => setShowProfile(true)}
             style={{
@@ -316,7 +336,7 @@ function StudentDashboard({ onSignOut, userId }) {
                           width: '100%', padding: '12px 14px', fontSize: '14px',
                           borderRadius: '10px', border: '1px solid #eee',
                           minHeight: '80px', resize: 'vertical', outline: 'none',
-                          fontFamily: 'Inter, sans-serif'
+                          fontFamily: 'inherit'
                         }}
                       />
                     </div>
