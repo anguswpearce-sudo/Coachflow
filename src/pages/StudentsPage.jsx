@@ -1,73 +1,121 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 
-const allStudents = [
-  { id: 1, name: 'Jamie Chen', age: 24, location: 'Sydney', fitnessLevel: 'Intermediate', programmeType: 'Strength', submissionStatus: 'Submitted', avatar: 'J' },
-  { id: 2, name: 'Alex Morgan', age: 31, location: 'Melbourne', fitnessLevel: 'Advanced', programmeType: 'HIIT', submissionStatus: 'Pending', avatar: 'A' },
-  { id: 3, name: 'Sam Patel', age: 19, location: 'Brisbane', fitnessLevel: 'Beginner', programmeType: 'Mobility', submissionStatus: 'Submitted', avatar: 'S' },
-  { id: 4, name: 'Riley Torres', age: 27, location: 'Perth', fitnessLevel: 'Intermediate', programmeType: 'Strength', submissionStatus: 'Pending', avatar: 'R' },
-  { id: 5, name: 'Jordan Lee', age: 22, location: 'Sydney', fitnessLevel: 'Beginner', programmeType: 'Cardio', submissionStatus: 'Submitted', avatar: 'J' },
-]
-
-const defaultLevels = ['Beginner', 'Intermediate', 'Advanced']
-
-function StudentsPage({ onBack }) {
+function StudentsPage({ onBack, userId }) {
+  const [students, setStudents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [sending, setSending] = useState(false)
   const [search, setSearch] = useState('')
-  const [filterAge, setFilterAge] = useState('All')
-  const [filterLevel, setFilterLevel] = useState('All')
-  const [filterType, setFilterType] = useState('All')
-  const [filterStatus, setFilterStatus] = useState('All')
-  const [filterLocation, setFilterLocation] = useState('All')
-  const [customLevels, setCustomLevels] = useState([])
-  const [showAddLevel, setShowAddLevel] = useState(false)
-  const [newLevel, setNewLevel] = useState('')
 
-  const allLevels = [...defaultLevels, ...customLevels]
+  useEffect(() => {
+    loadStudents()
+  }, [])
 
-  function addCustomLevel() {
-    if (newLevel.trim() === '') return
-    if (allLevels.includes(newLevel.trim())) {
-      alert('That level already exists!')
+  async function loadStudents() {
+    setLoading(true)
+
+    const { data, error } = await supabase
+      .from('coach_students')
+      .select('*')
+      .eq('coach_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading students:', error)
+    } else {
+      const enriched = await Promise.all((data || []).map(async (row) => {
+        if (row.student_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', row.student_id)
+            .single()
+
+          const { data: studentProfile } = await supabase
+            .from('student_profiles')
+            .select('*')
+            .eq('id', row.student_id)
+            .single()
+
+          return {
+            ...row,
+            email: profile?.email || row.student_email,
+            name: studentProfile?.name || null,
+            location: studentProfile?.location || null,
+            age: studentProfile?.age || null,
+            level: studentProfile?.level || null,
+          }
+        }
+        return { ...row, email: row.student_email }
+      }))
+
+      setStudents(enriched)
+    }
+    setLoading(false)
+  }
+
+  async function sendInvite() {
+    if (!inviteEmail.trim()) {
+      alert('Please enter a student email!')
       return
     }
-    setCustomLevels([...customLevels, newLevel.trim()])
-    setNewLevel('')
-    setShowAddLevel(false)
+
+    const already = students.find(s => s.student_email === inviteEmail.trim().toLowerCase())
+    if (already) {
+      alert('You have already invited this student!')
+      return
+    }
+
+    setSending(true)
+
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', inviteEmail.trim().toLowerCase())
+      .single()
+
+    const { error } = await supabase
+      .from('coach_students')
+      .insert([{
+        coach_id: userId,
+        student_email: inviteEmail.trim().toLowerCase(),
+        student_id: existingProfile?.id || null,
+        status: 'pending'
+      }])
+
+    if (error) {
+      alert('Error sending invite: ' + error.message)
+      setSending(false)
+      return
+    }
+
+    setInviteEmail('')
+    setShowAddForm(false)
+    setSending(false)
+    loadStudents()
   }
 
-  function removeCustomLevel(level) {
-    setCustomLevels(customLevels.filter(l => l !== level))
-    if (filterLevel === level) setFilterLevel('All')
+  async function removeStudent(id) {
+    if (!confirm('Remove this student from your list?')) return
+    await supabase.from('coach_students').delete().eq('id', id)
+    loadStudents()
   }
 
-  const filtered = allStudents.filter(s => {
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase())
-    const matchAge = filterAge === 'All' ||
-      (filterAge === 'Under 20' && s.age < 20) ||
-      (filterAge === '20-25' && s.age >= 20 && s.age <= 25) ||
-      (filterAge === '26-30' && s.age >= 26 && s.age <= 30) ||
-      (filterAge === 'Over 30' && s.age > 30)
-    const matchLevel = filterLevel === 'All' || s.fitnessLevel === filterLevel
-    const matchType = filterType === 'All' || s.programmeType === filterType
-    const matchStatus = filterStatus === 'All' || s.submissionStatus === filterStatus
-    const matchLocation = filterLocation === 'All' || s.location === filterLocation
-    return matchSearch && matchAge && matchLevel && matchType && matchStatus && matchLocation
+  const filtered = students.filter(s => {
+    const searchLower = search.toLowerCase()
+    return (
+      (s.name || '').toLowerCase().includes(searchLower) ||
+      (s.email || '').toLowerCase().includes(searchLower)
+    )
   })
 
-  const selectStyle = {
-    padding: '8px 12px',
-    border: '1px solid #eee',
-    borderRadius: '8px',
-    fontSize: '13px',
-    backgroundColor: 'white',
-    color: '#444',
-    cursor: 'pointer',
-    outline: 'none'
-  }
+  const accepted = filtered.filter(s => s.status === 'accepted')
+  const pending = filtered.filter(s => s.status === 'pending')
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5' }}>
-
-      {/* Navbar */}
       <div style={{
         backgroundColor: 'white',
         borderBottom: '1px solid #eeeeee',
@@ -86,303 +134,131 @@ function StudentsPage({ onBack }) {
         </div>
         <button
           onClick={onBack}
-          style={{
-            padding: '8px 18px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            border: '1px solid #eee',
-            color: '#666',
-            fontSize: '13px',
-            fontWeight: '500',
-            backgroundColor: 'white'
-          }}
+          style={{ padding: '8px 18px', cursor: 'pointer', borderRadius: '8px', border: '1px solid #eee', color: '#666', fontSize: '13px', fontWeight: '500', backgroundColor: 'white' }}
         >
           ← Back
         </button>
       </div>
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
-
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px' }}>Students</h1>
-          <p style={{ color: '#888', marginTop: '4px', fontSize: '15px' }}>
-            {filtered.length} student{filtered.length !== 1 ? 's' : ''} found
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+          <div>
+            <h1 style={{ fontSize: '26px', fontWeight: '700', letterSpacing: '-0.5px', margin: 0 }}>Students</h1>
+            <p style={{ color: '#888', marginTop: '4px', fontSize: '15px' }}>
+              {accepted.length} active · {pending.length} pending
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            style={{ padding: '10px 20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', backgroundColor: '#1D9E75', color: 'white', border: 'none', borderRadius: '10px' }}
+          >
+            + Add student
+          </button>
         </div>
 
-        {/* Search */}
-        <div style={{ marginBottom: '16px' }}>
+        {showAddForm && (
+          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '24px', border: '1px solid #eee', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '600', margin: '0 0 6px 0' }}>Invite a student</h3>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 16px 0' }}>
+              Enter their email address. They'll see a pending invite when they log in and can accept or decline.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="email"
+                placeholder="student@email.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
+                style={{ flex: 1, padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
+              />
+              <button
+                onClick={sendInvite}
+                disabled={sending}
+                style={{ padding: '10px 20px', backgroundColor: '#1D9E75', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}
+              >
+                {sending ? 'Sending...' : 'Send invite'}
+              </button>
+              <button
+                onClick={() => { setShowAddForm(false); setInviteEmail('') }}
+                style={{ padding: '10px 16px', cursor: 'pointer', borderRadius: '10px', border: '1px solid #eee', fontSize: '14px', backgroundColor: 'white', color: '#666' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '20px' }}>
           <input
             type="text"
-            placeholder="🔍 Search students by name..."
+            placeholder="🔍 Search students by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              border: '1px solid #eee',
-              borderRadius: '12px',
-              fontSize: '14px',
-              outline: 'none',
-              backgroundColor: 'white'
-            }}
+            style={{ width: '100%', padding: '12px 16px', border: '1px solid #eee', borderRadius: '12px', fontSize: '14px', outline: 'none', backgroundColor: 'white' }}
           />
         </div>
 
-        {/* Filters */}
-        <div style={{
-          padding: '16px',
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          border: '1px solid #eee',
-          marginBottom: '24px'
-        }}>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ fontSize: '13px', fontWeight: '500', color: '#888' }}>
-              Filters:
-            </div>
-
-            <select style={selectStyle} value={filterAge} onChange={(e) => setFilterAge(e.target.value)}>
-              <option value="All">All ages</option>
-              <option value="Under 20">Under 20</option>
-              <option value="20-25">20–25</option>
-              <option value="26-30">26–30</option>
-              <option value="Over 30">Over 30</option>
-            </select>
-
-            <select style={selectStyle} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}>
-              <option value="All">All levels</option>
-              {allLevels.map(level => (
-                <option key={level} value={level}>{level}</option>
-              ))}
-            </select>
-
-            <select style={selectStyle} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-              <option value="All">All programmes</option>
-              <option value="Strength">Strength</option>
-              <option value="HIIT">HIIT</option>
-              <option value="Mobility">Mobility</option>
-              <option value="Cardio">Cardio</option>
-            </select>
-
-            <select style={selectStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              <option value="All">All statuses</option>
-              <option value="Submitted">Submitted</option>
-              <option value="Pending">Pending</option>
-            </select>
-
-            <select style={selectStyle} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)}>
-              <option value="All">All locations</option>
-              <option value="Sydney">Sydney</option>
-              <option value="Melbourne">Melbourne</option>
-              <option value="Brisbane">Brisbane</option>
-              <option value="Perth">Perth</option>
-            </select>
-
-            {(filterAge !== 'All' || filterLevel !== 'All' || filterType !== 'All' || filterStatus !== 'All' || filterLocation !== 'All' || search !== '') && (
-              <button
-                onClick={() => { setFilterAge('All'); setFilterLevel('All'); setFilterType('All'); setFilterStatus('All'); setFilterLocation('All'); setSearch('') }}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #ffcccc',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  backgroundColor: '#fff5f5',
-                  color: '#cc0000',
-                  cursor: 'pointer'
-                }}
-              >
-                Clear ✕
-              </button>
-            )}
-          </div>
-
-          {/* Custom levels section */}
-          <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f0f0f0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '13px', fontWeight: '500', color: '#888' }}>
-                Custom levels:
-              </div>
-
-              {customLevels.length === 0 && !showAddLevel && (
-                <div style={{ fontSize: '13px', color: '#bbb' }}>None added yet</div>
-              )}
-
-              {customLevels.map(level => (
-                <div key={level} style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '5px 12px',
-                  backgroundColor: '#E1F5EE',
-                  borderRadius: '20px',
-                  fontSize: '13px',
-                  color: '#0F6E56',
-                  fontWeight: '500'
-                }}>
-                  {level}
-                  <span
-                    onClick={() => removeCustomLevel(level)}
-                    style={{ cursor: 'pointer', fontSize: '12px', color: '#888' }}
-                  >
-                    ✕
-                  </span>
-                </div>
-              ))}
-
-              {showAddLevel ? (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    placeholder="e.g. Club, Elite, White Belt..."
-                    value={newLevel}
-                    onChange={(e) => setNewLevel(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addCustomLevel()}
-                    style={{
-                      padding: '6px 12px',
-                      border: '1px solid #1D9E75',
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      outline: 'none',
-                      width: '200px'
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={addCustomLevel}
-                    style={{
-                      padding: '6px 14px',
-                      backgroundColor: '#1D9E75',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => { setShowAddLevel(false); setNewLevel('') }}
-                    style={{
-                      padding: '6px 14px',
-                      backgroundColor: 'white',
-                      color: '#666',
-                      border: '1px solid #eee',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '13px'
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowAddLevel(true)}
-                  style={{
-                    padding: '5px 12px',
-                    backgroundColor: 'white',
-                    color: '#1D9E75',
-                    border: '1px solid #1D9E75',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: '500'
-                  }}
-                >
-                  + Add custom level
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Student list */}
-        {filtered.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            border: '1px solid #eee',
-            color: '#888',
-            fontSize: '15px'
-          }}>
-            No students match your filters 🔍
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: '#aaa', fontSize: '15px' }}>Loading students...</div>
+        ) : students.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #eee', color: '#888', fontSize: '15px' }}>
+            👥 No students yet — click + Add student to invite someone!
           </div>
         ) : (
-          filtered.map((student) => (
-            <div key={student.id} style={{
-              backgroundColor: 'white',
-              borderRadius: '14px',
-              padding: '20px 24px',
-              marginBottom: '12px',
-              border: '1px solid #eee',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
-            }}>
-              <div style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                backgroundColor: '#1D9E75',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px',
-                color: 'white',
-                fontWeight: '600',
-                flexShrink: 0
-              }}>
-                {student.avatar}
+          <>
+            {pending.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#888', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending invites</h2>
+                {pending.map((student) => (
+                  <div key={student.id} style={{ backgroundColor: 'white', borderRadius: '14px', padding: '18px 24px', marginBottom: '10px', border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', color: '#aaa', fontWeight: '600' }}>?</div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#555' }}>{student.student_email}</div>
+                        <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>Invite sent · waiting for response</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ padding: '4px 12px', backgroundColor: '#FFF8E7', color: '#B07D00', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>⏳ Pending</span>
+                      <button onClick={() => removeStudent(student.id)} style={{ padding: '5px 12px', fontSize: '12px', cursor: 'pointer', borderRadius: '6px', border: '1px solid #ffcccc', backgroundColor: '#fff5f5', color: '#cc0000' }}>Cancel</button>
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '600', fontSize: '15px' }}>{student.name}</div>
-                <div style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
-                  📍 {student.location} · 🎂 Age {student.age} · 💪 {student.fitnessLevel}
-                </div>
+            {accepted.length > 0 && (
+              <div>
+                <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#888', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active students</h2>
+                {accepted.map((student) => (
+                  <div key={student.id} style={{ backgroundColor: 'white', borderRadius: '14px', padding: '18px 24px', marginBottom: '10px', border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg, #1D9E75, #0F6E56)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', color: 'white', fontWeight: '600' }}>
+                        {(student.name || student.email || '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '15px', fontWeight: '600' }}>{student.name || student.email}</div>
+                        <div style={{ fontSize: '13px', color: '#888', marginTop: '3px' }}>
+                          {student.name && <span>{student.email} · </span>}
+                          {student.location && <span>📍 {student.location} · </span>}
+                          {student.age && <span>🎂 Age {student.age} · </span>}
+                          {student.level && <span>💪 {student.level}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ padding: '4px 12px', backgroundColor: '#E1F5EE', color: '#0F6E56', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>✅ Active</span>
+                      <button onClick={() => removeStudent(student.id)} style={{ padding: '5px 12px', fontSize: '12px', cursor: 'pointer', borderRadius: '6px', border: '1px solid #ffcccc', backgroundColor: '#fff5f5', color: '#cc0000' }}>Remove</button>
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span style={{
-                  padding: '4px 10px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  backgroundColor: '#E1F5EE',
-                  color: '#0F6E56'
-                }}>
-                  {student.programmeType}
-                </span>
-                <span style={{
-                  padding: '4px 10px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  backgroundColor: student.submissionStatus === 'Submitted' ? '#E1F5EE' : '#FAEEDA',
-                  color: student.submissionStatus === 'Submitted' ? '#0F6E56' : '#854F0B'
-                }}>
-                  {student.submissionStatus === 'Submitted' ? '✅ Submitted' : '⏳ Pending'}
-                </span>
-                <button style={{
-                  padding: '7px 14px',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  borderRadius: '8px',
-                  border: '1px solid #eee',
-                  backgroundColor: 'white',
-                  color: '#555',
-                  fontWeight: '500'
-                }}>
-                  View →
-                </button>
-              </div>
-            </div>
-          ))
+            {filtered.length === 0 && search && (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#aaa', fontSize: '14px' }}>No students match "{search}"</div>
+            )}
+          </>
         )}
       </div>
     </div>
