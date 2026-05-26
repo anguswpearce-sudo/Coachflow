@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import CoachDashboard from './pages/CoachDashboard'
-import StudentDashboard from './pages/StudentDashboard'
+import MainLayout from './pages/MainLayout'
 
 function App() {
   const [role, setRole] = useState(null)
@@ -15,12 +14,8 @@ function App() {
     setPage('login')
   }
 
-  if (role === 'coach') {
-    return <CoachDashboard onSignOut={handleSignOut} userId={user} />
-  }
-
-  if (role === 'student') {
-    return <StudentDashboard onSignOut={handleSignOut} userId={user} />
+  if (role === 'coach' || role === 'student') {
+    return <MainLayout userId={user} role={role} onSignOut={handleSignOut} />
   }
 
   if (page === 'signup') {
