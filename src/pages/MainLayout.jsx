@@ -15,15 +15,21 @@ const tabs = [
 
 function MainLayout({ userId, role, onSignOut }) {
   const [activeTab, setActiveTab] = useState('home')
+  const [openProgramme, setOpenProgramme] = useState(null)
+
+  function navigateToProgramme(programme) {
+    setOpenProgramme(programme)
+    setActiveTab('train')
+  }
 
   function renderTab() {
     switch (activeTab) {
-      case 'home':     return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} />
+      case 'home':     return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} />
       case 'discover': return <DiscoverTab userId={userId} role={role} />
-      case 'train':    return <TrainTab userId={userId} role={role} />
+      case 'train':    return <TrainTab userId={userId} role={role} initialProgramme={openProgramme} onClearProgramme={() => setOpenProgramme(null)} />
       case 'play':     return <PlayTab userId={userId} role={role} />
       case 'profile':  return <ProfileTab userId={userId} role={role} onSignOut={onSignOut} />
-      default:         return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} />
+      default:         return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} />
     }
   }
 
@@ -40,12 +46,10 @@ function MainLayout({ userId, role, onSignOut }) {
     }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
-      {/* Page content */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
         {renderTab()}
       </div>
 
-      {/* Bottom tab bar */}
       <div style={{
         position: 'fixed',
         bottom: 0,
@@ -64,7 +68,7 @@ function MainLayout({ userId, role, onSignOut }) {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); if (tab.id !== 'train') setOpenProgramme(null) }}
               style={{
                 flex: 1,
                 padding: '10px 0 12px 0',
@@ -75,7 +79,7 @@ function MainLayout({ userId, role, onSignOut }) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: '4px',
-                transition: 'all 0.15s',
+                position: 'relative',
               }}
             >
               <div style={{

@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-function TrainTab({ userId, role }) {
+function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   const [programmes, setProgrammes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedProg, setSelectedProg] = useState(null)
+  const [selectedProg, setSelectedProg] = useState(initialProgramme || null)
   const [completedActivities, setCompletedActivities] = useState({})
   const [submitted, setSubmitted] = useState({})
   const [notes, setNotes] = useState({})
+
+  useEffect(() => {
+    if (initialProgramme) setSelectedProg(initialProgramme)
+  }, [initialProgramme])
 
   useEffect(() => { loadProgrammes() }, [userId])
 
@@ -24,6 +28,11 @@ function TrainTab({ userId, role }) {
       }
     }
     setLoading(false)
+  }
+
+  function handleBack() {
+    setSelectedProg(null)
+    if (onClearProgramme) onClearProgramme()
   }
 
   function toggleActivity(progId, actIndex) {
@@ -52,7 +61,7 @@ function TrainTab({ userId, role }) {
     return (
       <div style={{ backgroundColor: '#0a0a0a', minHeight: '100vh', color: 'white' }}>
         <div style={{ padding: '56px 20px 20px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => setSelectedProg(null)} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' }}>← Back</button>
+          <button onClick={handleBack} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' }}>← Back</button>
         </div>
 
         <div style={{ padding: '0 20px' }}>
@@ -61,7 +70,6 @@ function TrainTab({ userId, role }) {
             <div style={{ fontSize: '13px', color: '#555' }}>📅 Due {selectedProg.due_date || 'No date set'}</div>
           </div>
 
-          {/* Progress bar */}
           <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '16px', marginBottom: '16px', border: '1px solid #1a1a1a' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <span style={{ fontSize: '13px', color: '#aaa' }}>Progress</span>
@@ -73,7 +81,6 @@ function TrainTab({ userId, role }) {
             <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>{completed.length} of {acts.length} activities done</div>
           </div>
 
-          {/* Activities */}
           {acts.map((act, i) => {
             const isDone = (completedActivities[selectedProg.id] || []).includes(i)
             return (
@@ -111,7 +118,6 @@ function TrainTab({ userId, role }) {
             )
           })}
 
-          {/* Submit section (students only) */}
           {role === 'student' && !isSubmitted && (
             <div style={{ marginTop: '20px' }}>
               <textarea

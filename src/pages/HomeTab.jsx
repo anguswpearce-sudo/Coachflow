@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-function HomeTab({ userId, role, onSignOut, onNavigate }) {
+function HomeTab({ userId, role, onSignOut, onNavigate, onOpenProgramme }) {
   const [profile, setProfile] = useState(null)
   const [programmes, setProgrammes] = useState([])
-  const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
     loadProfile()
@@ -103,7 +102,6 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
                 padding: '18px 16px',
                 cursor: 'pointer',
                 textAlign: 'left',
-                transition: 'all 0.15s',
               }}
             >
               <div style={{ fontSize: '24px', marginBottom: '8px' }}>{item.icon}</div>
@@ -113,7 +111,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
         </div>
       </div>
 
-      {/* Recent programmes */}
+      {/* Recent programmes — now clickable */}
       <div style={{ padding: '0 20px 24px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div style={{ fontSize: '12px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>
@@ -131,16 +129,24 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
           </div>
         ) : (
           programmes.map((prog, i) => (
-            <div key={i} style={{
-              backgroundColor: '#111',
-              borderRadius: '16px',
-              padding: '16px 18px',
-              marginBottom: '10px',
-              border: '1px solid #1a1a1a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
+            <div
+              key={i}
+              onClick={() => onOpenProgramme(prog)}
+              style={{
+                backgroundColor: '#111',
+                borderRadius: '16px',
+                padding: '16px 18px',
+                marginBottom: '10px',
+                border: '1px solid #1a1a1a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#1D9E75'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a1a'}
+            >
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: 'white', marginBottom: '4px' }}>{prog.name}</div>
                 <div style={{ fontSize: '12px', color: '#555' }}>
@@ -151,7 +157,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
                 width: '32px', height: '32px', borderRadius: '50%',
                 backgroundColor: 'rgba(29,158,117,0.15)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '14px'
+                fontSize: '14px', color: '#1D9E75', fontWeight: '700'
               }}>
                 →
               </div>
@@ -160,7 +166,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
         )}
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={{ padding: '0 20px 24px 20px' }}>
         <div style={{ fontSize: '12px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Your Stats</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -180,20 +186,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate }) {
 
       {/* Sign out */}
       <div style={{ padding: '0 20px 32px 20px' }}>
-        <button
-          onClick={onSignOut}
-          style={{
-            width: '100%',
-            padding: '14px',
-            backgroundColor: 'transparent',
-            border: '1px solid #222',
-            borderRadius: '12px',
-            color: '#555',
-            fontSize: '13px',
-            fontWeight: '500',
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={onSignOut} style={{ width: '100%', padding: '14px', backgroundColor: 'transparent', border: '1px solid #222', borderRadius: '12px', color: '#555', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
           Sign out
         </button>
       </div>
