@@ -282,13 +282,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate, onOpenProgramme }) {
         </div>
       </div>
 
-      {/* Sign out */}
-      <div style={{ padding: '0 20px 32px 20px' }}>
-        <button onClick={onSignOut} style={{ width: '100%', padding: '14px', backgroundColor: 'transparent', border: '1px solid #222', borderRadius: '12px', color: '#555', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-          Sign out
-        </button>
-      </div>
-    </div>
+</div>
   )
 }
 
