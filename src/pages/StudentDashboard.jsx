@@ -12,6 +12,7 @@ function StudentDashboard({ onSignOut, userId }) {
   const [showMessages, setShowMessages] = useState(false)
   const [notes, setNotes] = useState({})
   const [uploadedVideos, setUploadedVideos] = useState({})
+  const [uploadingVideos, setUploadingVideos] = useState({})
   const [pendingInvites, setPendingInvites] = useState([])
   const [showInvites, setShowInvites] = useState(false)
 
@@ -98,8 +99,30 @@ function StudentDashboard({ onSignOut, userId }) {
     return (completedActivities[progId] || []).includes(actIndex)
   }
 
-  function handleVideoUpload(progId, actIndex, file) {
-    setUploadedVideos({ ...uploadedVideos, [`${progId}-${actIndex}`]: file.name })
+  async function handleVideoUpload(progId, actIndex, file) {
+    const key = `${progId}-${actIndex}`
+    setUploadingVideos({ ...uploadingVideos, [key]: true })
+
+    // Create a unique file path: userId/programmeId/activityIndex/filename
+    const filePath = `${userId}/${progId}/${actIndex}/${Date.now()}-${file.name}`
+
+    const { error } = await supabase.storage
+      .from('videos')
+      .upload(filePath, file, { upsert: true })
+
+    if (error) {
+      alert('Error uploading video: ' + error.message)
+      setUploadingVideos({ ...uploadingVideos, [key]: false })
+      return
+    }
+
+    // Get the public URL so we can save it to the submission
+    const { data: urlData } = supabase.storage
+      .from('videos')
+      .getPublicUrl(filePath)
+
+    setUploadedVideos({ ...uploadedVideos, [key]: { name: file.name, url: urlData.publicUrl } })
+    setUploadingVideos({ ...uploadingVideos, [key]: false })
   }
 
   async function handleSubmit(progId) {
@@ -108,9 +131,26 @@ function StudentDashboard({ onSignOut, userId }) {
       alert('Please tick off at least one activity before submitting!')
       return
     }
+
+    // Collect any video URLs for this programme
+    const videoUrls = {}
+    Object.keys(uploadedVideos).forEach(key => {
+      if (key.startsWith(`${progId}-`)) {
+        const actIndex = key.split('-')[1]
+        videoUrls[actIndex] = uploadedVideos[key].url
+      }
+    })
+
     const { error } = await supabase
       .from('submissions')
-      .insert([{ programme_id: progId, student_id: userId, notes: notes[progId] || '', completed_activities: completed }])
+      .insert([{
+        programme_id: progId,
+        student_id: userId,
+        notes: notes[progId] || '',
+        completed_activities: completed,
+        video_urls: videoUrls
+      }])
+
     if (error) { alert('Error submitting: ' + error.message); return }
     setSubmitted({ ...submitted, [progId]: true })
   }
@@ -223,28 +263,47 @@ function StudentDashboard({ onSignOut, userId }) {
                   <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '16px' }}>No activities added yet</div>
                 ) : (
                   <div style={{ marginBottom: '20px' }}>
-                    {acts.map((activity, actIndex) => (
-                      <div key={actIndex} style={{ padding: '14px', marginBottom: '8px', border: `1px solid ${isCompleted(programme.id, actIndex) ? '#1D9E75' : '#eee'}`, borderRadius: '12px', backgroundColor: isCompleted(programme.id, actIndex) ? '#f0fdf4' : 'white', transition: 'all 0.15s' }}>
-                        <div onClick={() => !isSubmitted && toggleActivity(programme.id, actIndex)} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isSubmitted ? 'default' : 'pointer' }}>
-                          <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: `2px solid ${isCompleted(programme.id, actIndex) ? '#1D9E75' : '#ddd'}`, backgroundColor: isCompleted(programme.id, actIndex) ? '#1D9E75' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            {isCompleted(programme.id, actIndex) && <span style={{ color: 'white', fontSize: '13px' }}>✓</span>}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: '500', fontSize: '14px' }}>{activity.name}</div>
-                            <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{activity.detail}</div>
-                          </div>
-                          {activity.requiresVideo && <span style={{ fontSize: '11px', backgroundColor: '#FAEEDA', color: '#854F0B', padding: '3px 10px', borderRadius: '20px', fontWeight: '500' }}>📹 video required</span>}
-                        </div>
+                    {acts.map((activity, actIndex) => {
+                      const key = `${programme.id}-${actIndex}`
+                      const isUploading = uploadingVideos[key]
+                      const videoUploaded = uploadedVideos[key]
 
-                        {activity.requiresVideo && isCompleted(programme.id, actIndex) && !isSubmitted && (
-                          <div style={{ marginTop: '12px', paddingLeft: '38px' }}>
-                            <label htmlFor={`video-${programme.id}-${actIndex}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', backgroundColor: 'white', border: '1px solid #1D9E75', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#1D9E75', fontWeight: '500' }}>📹 Film or choose video</label>
-                            <input id={`video-${programme.id}-${actIndex}`} type="file" accept="video/*" capture="camcorder" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) handleVideoUpload(programme.id, actIndex, e.target.files[0]) }} />
-                            {uploadedVideos[`${programme.id}-${actIndex}`] && <p style={{ marginTop: '6px', fontSize: '12px', color: '#1D9E75' }}>✅ {uploadedVideos[`${programme.id}-${actIndex}`]} ready to submit</p>}
+                      return (
+                        <div key={actIndex} style={{ padding: '14px', marginBottom: '8px', border: `1px solid ${isCompleted(programme.id, actIndex) ? '#1D9E75' : '#eee'}`, borderRadius: '12px', backgroundColor: isCompleted(programme.id, actIndex) ? '#f0fdf4' : 'white', transition: 'all 0.15s' }}>
+                          <div onClick={() => !isSubmitted && toggleActivity(programme.id, actIndex)} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isSubmitted ? 'default' : 'pointer' }}>
+                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: `2px solid ${isCompleted(programme.id, actIndex) ? '#1D9E75' : '#ddd'}`, backgroundColor: isCompleted(programme.id, actIndex) ? '#1D9E75' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {isCompleted(programme.id, actIndex) && <span style={{ color: 'white', fontSize: '13px' }}>✓</span>}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: '500', fontSize: '14px' }}>{activity.name}</div>
+                              <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{activity.detail}</div>
+                            </div>
+                            {activity.requiresVideo && <span style={{ fontSize: '11px', backgroundColor: '#FAEEDA', color: '#854F0B', padding: '3px 10px', borderRadius: '20px', fontWeight: '500' }}>📹 video required</span>}
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {activity.requiresVideo && isCompleted(programme.id, actIndex) && !isSubmitted && (
+                            <div style={{ marginTop: '12px', paddingLeft: '38px' }}>
+                              {isUploading ? (
+                                <div style={{ fontSize: '13px', color: '#1D9E75', fontWeight: '500' }}>⏳ Uploading video...</div>
+                              ) : videoUploaded ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <div style={{ fontSize: '13px', color: '#1D9E75', fontWeight: '500' }}>✅ {videoUploaded.name} uploaded!</div>
+                                  <label htmlFor={`video-${key}`} style={{ fontSize: '12px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>Change</label>
+                                  <input id={`video-${key}`} type="file" accept="video/*" capture="camcorder" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) handleVideoUpload(programme.id, actIndex, e.target.files[0]) }} />
+                                </div>
+                              ) : (
+                                <div>
+                                  <label htmlFor={`video-${key}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', backgroundColor: 'white', border: '1px solid #1D9E75', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#1D9E75', fontWeight: '500' }}>
+                                    📹 Film or choose video
+                                  </label>
+                                  <input id={`video-${key}`} type="file" accept="video/*" capture="camcorder" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) handleVideoUpload(programme.id, actIndex, e.target.files[0]) }} />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
 
