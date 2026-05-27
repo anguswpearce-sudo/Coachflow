@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 
-function MessagesPage({ userId, role, onBack }) {
+function MessagesPage({ userId, role, onBack, embedded }) {
   const [conversations, setConversations] = useState([])
   const [selectedConversation, setSelectedConversation] = useState(null)
   const [messages, setMessages] = useState([])
@@ -29,14 +29,8 @@ function MessagesPage({ userId, role, onBack }) {
 
   async function loadConversations() {
     setLoading(true)
-
     if (role === 'coach') {
-      const { data } = await supabase
-        .from('coach_students')
-        .select('*')
-        .eq('coach_id', userId)
-        .eq('status', 'accepted')
-
+      const { data } = await supabase.from('coach_students').select('*').eq('coach_id', userId).eq('status', 'accepted')
       const convs = (data || []).map(row => ({
         otherId: row.student_id,
         otherEmail: row.student_email,
@@ -44,7 +38,6 @@ function MessagesPage({ userId, role, onBack }) {
         coachId: userId,
         studentId: row.student_id,
       }))
-
       const enriched = await Promise.all(convs.map(async (conv) => {
         if (conv.otherId) {
           const { data: sp } = await supabase.from('student_profiles').select('name').eq('id', conv.otherId).single()
@@ -52,56 +45,40 @@ function MessagesPage({ userId, role, onBack }) {
         }
         return conv
       }))
-
       setConversations(enriched)
     } else {
       const { data: profile } = await supabase.from('profiles').select('email').eq('id', userId).single()
       if (!profile) { setLoading(false); return }
-
-      const { data } = await supabase
-        .from('coach_students')
-        .select('*')
-        .eq('student_email', profile.email)
-        .eq('status', 'accepted')
-
+      const { data } = await supabase.from('coach_students').select('*').eq('student_email', profile.email).eq('status', 'accepted')
       const enriched = await Promise.all((data || []).map(async (row) => {
         const { data: cp } = await supabase.from('coach_profiles').select('name').eq('id', row.coach_id).single()
         return { otherId: row.coach_id, otherName: cp?.name || 'Your Coach', coachId: row.coach_id, studentId: userId }
       }))
-
       setConversations(enriched)
     }
-
     setLoading(false)
   }
 
   async function loadMessages(conversation) {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('coach_id', conversation.coachId)
-      .eq('student_id', conversation.studentId)
-      .order('created_at', { ascending: true })
+    const { data } = await supabase.from('messages').select('*').eq('coach_id', conversation.coachId).eq('student_id', conversation.studentId).order('created_at', { ascending: true })
     setMessages(data || [])
   }
 
   function subscribeToMessages(conversation) {
     if (subscriptionRef.current) subscriptionRef.current.unsubscribe()
-    subscriptionRef.current = supabase
-      .channel('messages-channel')
+    subscriptionRef.current = supabase.channel('messages-channel')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `coach_id=eq.${conversation.coachId}` }, (payload) => {
         if (payload.new.student_id === conversation.studentId) {
           setMessages(prev => [...prev, payload.new])
         }
-      })
-      .subscribe()
+      }).subscribe()
   }
 
   async function sendMessage() {
     if (!newMessage.trim() || !selectedConversation) return
     setSending(true)
     const { error } = await supabase.from('messages').insert([{ coach_id: selectedConversation.coachId, student_id: selectedConversation.studentId, sender_id: userId, content: newMessage.trim() }])
-    if (error) alert('Error sending message: ' + error.message)
+    if (error) alert('Error: ' + error.message)
     else setNewMessage('')
     setSending(false)
   }
@@ -142,96 +119,134 @@ function MessagesPage({ userId, role, onBack }) {
     return groups
   }
 
-  return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-        <button onClick={onBack} style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', backgroundColor: 'white' }}>← Back</button>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', margin: 0 }}>Messages</h1>
-          <p style={{ fontSize: '13px', color: '#888', margin: '2px 0 0 0' }}>{role === 'coach' ? 'Chat with your students' : 'Chat with your coach'}</p>
-        </div>
-      </div>
+  // Full screen chat view
+  if (selectedConversation) {
+    return (
+      <div style={{ backgroundColor: '#0a0a0a', display: 'flex', flexDirection: 'column', height: embedded ? 'calc(100vh - 140px)' : '100vh', color: 'white' }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #eee', overflow: 'hidden', height: '600px' }}>
-
-        <div style={{ borderRight: '1px solid #eee', overflowY: 'auto', backgroundColor: '#fafafa' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid #eee' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Conversations</div>
+        {/* Chat header */}
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#111' }}>
+          <button onClick={() => setSelectedConversation(null)} style={{ background: 'none', border: 'none', color: '#1D9E75', fontSize: '20px', cursor: 'pointer', padding: '0', lineHeight: 1 }}>←</button>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', color: 'white', fontWeight: '700' }}>
+            {selectedConversation.otherName[0].toUpperCase()}
           </div>
-          {loading ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>Loading...</div>
-          ) : conversations.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#aaa', fontSize: '13px', lineHeight: '1.6' }}>
-              {role === 'coach' ? 'No accepted students yet. Add students from the Students page.' : 'No coaches yet. Accept a coach invite to start chatting.'}
-            </div>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '700' }}>{selectedConversation.otherName}</div>
+            <div style={{ fontSize: '11px', color: '#1D9E75' }}>● Active</div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#0a0a0a' }}>
+          {messages.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#444', fontSize: '14px', marginTop: '40px' }}>No messages yet — say hello! 👋</div>
           ) : (
-            conversations.map((conv, i) => (
-              <div key={i} onClick={() => setSelectedConversation(conv)} style={{ padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid #eee', backgroundColor: selectedConversation?.otherId === conv.otherId ? '#E1F5EE' : 'white' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg, #1D9E75, #0F6E56)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', color: 'white', fontWeight: '600', flexShrink: 0 }}>
-                    {(conv.otherName || '?')[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a1a' }}>{conv.otherName}</div>
-                    {conv.otherEmail && <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>{conv.otherEmail}</div>}
-                  </div>
+            groupMessagesByDate(messages).map((group, gi) => (
+              <div key={gi}>
+                <div style={{ textAlign: 'center', margin: '12px 0', fontSize: '11px', color: '#444' }}>
+                  <span style={{ backgroundColor: '#111', padding: '3px 12px', borderRadius: '20px', border: '1px solid #1a1a1a' }}>{formatDate(group.messages[0].created_at)}</span>
                 </div>
+                {group.messages.map((msg, mi) => {
+                  const isMe = msg.sender_id === userId
+                  return (
+                    <div key={mi} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '6px' }}>
+                      <div style={{
+                        maxWidth: '72%', padding: '10px 14px',
+                        borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        backgroundColor: isMe ? '#1D9E75' : '#111',
+                        color: 'white', fontSize: '14px', lineHeight: '1.5',
+                        border: isMe ? 'none' : '1px solid #1a1a1a',
+                        userSelect: 'text', cursor: 'text'
+                      }}>
+                        <div>{msg.content}</div>
+                        <div style={{ fontSize: '10px', marginTop: '4px', color: isMe ? 'rgba(255,255,255,0.6)' : '#444', textAlign: 'right' }}>{formatTime(msg.created_at)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             ))
           )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {!selectedConversation ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ fontSize: '40px' }}>💬</div>
-            <div style={{ fontSize: '15px', fontWeight: '500', color: '#999' }}>Select a conversation</div>
-            <div style={{ fontSize: '13px', color: '#bbb' }}>Choose someone from the left to start chatting</div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: 'white' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #1D9E75, #0F6E56)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', color: 'white', fontWeight: '600' }}>
-                {selectedConversation.otherName[0].toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontSize: '14px', fontWeight: '600' }}>{selectedConversation.otherName}</div>
-                <div style={{ fontSize: '12px', color: '#1D9E75' }}>● Active</div>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', backgroundColor: '#F7F7F5', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {messages.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#bbb', fontSize: '14px', marginTop: '40px' }}>No messages yet — say hello! 👋</div>
-              ) : (
-                groupMessagesByDate(messages).map((group, gi) => (
-                  <div key={gi}>
-                    <div style={{ textAlign: 'center', margin: '16px 0 12px 0', fontSize: '12px', color: '#aaa' }}>
-                      <span style={{ backgroundColor: '#e8e8e8', padding: '3px 12px', borderRadius: '20px' }}>{formatDate(group.messages[0].created_at)}</span>
-                    </div>
-                    {group.messages.map((msg, mi) => {
-                      const isMe = msg.sender_id === userId
-                      return (
-                        <div key={mi} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '6px' }}>
-                          <div style={{ maxWidth: '65%', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', backgroundColor: isMe ? '#1D9E75' : 'white', color: isMe ? 'white' : '#1a1a1a', fontSize: '14px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.06)', border: isMe ? 'none' : '1px solid #eee', userSelect: 'text', cursor: 'text' }}>
-                            <div>{msg.content}</div>
-                            <div style={{ fontSize: '11px', marginTop: '4px', color: isMe ? 'rgba(255,255,255,0.7)' : '#bbb', textAlign: 'right' }}>{formatTime(msg.created_at)}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div style={{ padding: '14px 16px', borderTop: '1px solid #eee', backgroundColor: 'white', display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-              <textarea value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} placeholder="Type a message... (Enter to send)" rows={1} style={{ flex: 1, padding: '10px 14px', border: '1px solid #eee', borderRadius: '22px', fontSize: '14px', outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: '1.5', maxHeight: '100px', overflowY: 'auto' }} />
-              <button onClick={sendMessage} disabled={sending || !newMessage.trim()} style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: newMessage.trim() ? '#1D9E75' : '#eee', border: 'none', cursor: newMessage.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>➤</button>
-            </div>
-          </div>
-        )}
+        {/* Input */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1a1a1a', backgroundColor: '#111', display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+          <textarea
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Message..."
+            rows={1}
+            style={{ flex: 1, padding: '10px 14px', border: '1px solid #222', borderRadius: '22px', fontSize: '14px', outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: '1.5', maxHeight: '100px', overflowY: 'auto', backgroundColor: '#0a0a0a', color: 'white' }}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={sending || !newMessage.trim()}
+            style={{
+              width: '40px', height: '40px', borderRadius: '50%',
+              backgroundColor: newMessage.trim() ? '#1D9E75' : '#222',
+              border: 'none', cursor: newMessage.trim() ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
       </div>
+    )
+  }
+
+  // Conversation list
+  return (
+    <div style={{ backgroundColor: '#0a0a0a', color: 'white', minHeight: embedded ? 'auto' : '100vh' }}>
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#555' }}>Loading...</div>
+      ) : conversations.length === 0 ? (
+        <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '40px', marginBottom: '12px' }}>💬</div>
+          <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '6px' }}>No conversations yet</div>
+          <div style={{ fontSize: '13px', color: '#555' }}>
+            {role === 'coach' ? 'Add students to start messaging' : 'Accept a coach invite to start messaging'}
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: '0 0 8px 0' }}>
+          {conversations.map((conv, i) => (
+            <div
+              key={i}
+              onClick={() => setSelectedConversation(conv)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '14px',
+                padding: '14px 20px', cursor: 'pointer',
+                borderBottom: '1px solid #111',
+                backgroundColor: '#0a0a0a',
+                transition: 'background 0.1s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#111'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0a0a0a'}
+            >
+              <div style={{
+                width: '46px', height: '46px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #1D9E75, #0a5c43)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '18px', color: 'white', fontWeight: '700', flexShrink: 0
+              }}>
+                {(conv.otherName || '?')[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px' }}>{conv.otherName}</div>
+                {conv.otherEmail && <div style={{ fontSize: '12px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv.otherEmail}</div>}
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

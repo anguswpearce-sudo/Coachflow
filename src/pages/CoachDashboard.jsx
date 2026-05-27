@@ -24,13 +24,32 @@ function CoachDashboard({ onSignOut, userId }) {
   const [newActivityRepType, setNewActivityRepType] = useState('reps')
   const [newActivityVideo, setNewActivityVideo] = useState(false)
   const [programmes, setProgrammes] = useState([])
+  const [submissionsCount, setSubmissionsCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadProgrammes() }, [])
 
   async function loadProgrammes() {
-    const { data, error } = await supabase.from('programmes').select('*').eq('coach_id', userId).order('created_at', { ascending: false })
-    if (!error) setProgrammes(data || [])
+    const { data, error } = await supabase
+      .from('programmes')
+      .select('*')
+      .eq('coach_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setProgrammes(data)
+
+      // Load unreviewed submissions count for this coach's programmes
+      const programmeIds = data.map(p => p.id)
+      if (programmeIds.length > 0) {
+        const { count } = await supabase
+          .from('submissions')
+          .select('*', { count: 'exact', head: true })
+          .in('programme_id', programmeIds)
+          .eq('reviewed', false)
+        setSubmissionsCount(count || 0)
+      }
+    }
     setLoading(false)
   }
 
@@ -92,11 +111,11 @@ function CoachDashboard({ onSignOut, userId }) {
           {[
             { label: 'Active programmes', value: programmes.length, emoji: '📋', onClick: null },
             { label: 'Students', value: new Set(programmes.map(p => p.student_email)).size, emoji: '👥', onClick: () => setShowStudents(true) },
-            { label: 'Submissions', value: '0', emoji: '📥', onClick: () => setShowSubmissions(true) },
+            { label: 'New submissions', value: submissionsCount, emoji: '📥', onClick: () => setShowSubmissions(true) },
           ].map((stat, i) => (
-            <div key={i} onClick={stat.onClick} style={{ backgroundColor: 'white', borderRadius: '14px', padding: '20px', border: '1px solid #eee', cursor: stat.onClick ? 'pointer' : 'default' }}>
+            <div key={i} onClick={stat.onClick} style={{ backgroundColor: 'white', borderRadius: '14px', padding: '20px', border: `1px solid ${stat.label === 'New submissions' && submissionsCount > 0 ? '#1D9E75' : '#eee'}`, cursor: stat.onClick ? 'pointer' : 'default' }}>
               <div style={{ fontSize: '22px', marginBottom: '8px' }}>{stat.emoji}</div>
-              <div style={{ fontSize: '26px', fontWeight: '700' }}>{stat.value}</div>
+              <div style={{ fontSize: '26px', fontWeight: '700', color: stat.label === 'New submissions' && submissionsCount > 0 ? '#1D9E75' : '#1a1a1a' }}>{stat.value}</div>
               <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{stat.label}</div>
               {stat.onClick && <div style={{ fontSize: '12px', color: '#1D9E75', marginTop: '6px', fontWeight: '500' }}>View all →</div>}
             </div>
