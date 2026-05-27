@@ -11,6 +11,8 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   const [notes, setNotes] = useState({})
   const [showCreate, setShowCreate] = useState(false)
   const [studentNames, setStudentNames] = useState({})
+  const [uploadedVideos, setUploadedVideos] = useState({})
+  const [uploadingVideos, setUploadingVideos] = useState({})
 
   // Create form state
   const [progName, setProgName] = useState('')
@@ -19,10 +21,9 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   const [repeatWeeks, setRepeatWeeks] = useState(4)
   const [startDate, setStartDate] = useState('')
   const [sessions, setSessions] = useState([])
-  const [sessionLabelType, setSessionLabelType] = useState('numbered') // 'numbered' or 'days'
+  const [sessionLabelType, setSessionLabelType] = useState('numbered')
   const [saving, setSaving] = useState(false)
 
-  // New session/activity state
   const [newSessionName, setNewSessionName] = useState('')
   const [activeSessionIndex, setActiveSessionIndex] = useState(null)
   const [newActivityName, setNewActivityName] = useState('')
@@ -40,13 +41,61 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
   useEffect(() => { loadProgrammes() }, [userId])
 
+  // Load progress from Supabase when student opens a programme
+  useEffect(() => {
+    if (role === 'student' && selectedProg) {
+      loadProgress(selectedProg.id)
+      loadSubmissions(selectedProg.id)
+    }
+  }, [selectedProg])
+
+  async function loadProgress(programmeId) {
+    const { data } = await supabase
+      .from('activity_progress')
+      .select('*')
+      .eq('student_id', userId)
+      .eq('programme_id', programmeId)
+
+    if (data) {
+      const map = {}
+      data.forEach(row => {
+        if (row.completed) {
+          map[`${programmeId}-${row.session_index}-${row.activity_index}`] = true
+        }
+      })
+      setCompletedActivities(prev => ({ ...prev, ...map }))
+    }
+  }
+
+  async function loadSubmissions(programmeId) {
+    const { data } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('programme_id', programmeId)
+      .eq('student_id', userId)
+
+    if (data) {
+      const map = {}
+      data.forEach(row => {
+        // Each submission has a session_index if we saved it, otherwise use 0
+        const si = row.session_index ?? 0
+        map[`${programmeId}-${si}`] = true
+      })
+      setSubmitted(prev => ({ ...prev, ...map }))
+    }
+  }
+
   async function loadProgrammes() {
     setLoading(true)
     let progs = []
     if (role === 'coach') {
-      const { data } = await supabase.from('programmes').select('*').eq('coach_id', userId).order('created_at', { ascending: false })
+      const { data } = await supabase
+        .from('programmes')
+        .select('*')
+        .eq('coach_id', userId)
+        .order('created_at', { ascending: false })
       progs = data || []
-      // Load student names
+
       const emails = [...new Set(progs.map(p => p.student_email))]
       const nameMap = {}
       await Promise.all(emails.map(async (email) => {
@@ -85,16 +134,11 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     if (newActivityRepType === 'reps') detail = `${newActivitySets} sets × ${newActivityReps} reps`
     else if (newActivityRepType === 'amrap') detail = `${newActivitySets} sets × AMRAP`
     else if (newActivityRepType === 'time') detail = `${newActivitySets} sets × ${newActivityDuration}`
-
     const updated = [...sessions]
     updated[sessionIndex].activities.push({ name: newActivityName.trim(), detail, requiresVideo: newActivityVideo })
     setSessions(updated)
-    setNewActivityName('')
-    setNewActivitySets('3')
-    setNewActivityReps('10')
-    setNewActivityDuration('')
-    setNewActivityRepType('reps')
-    setNewActivityVideo(false)
+    setNewActivityName(''); setNewActivitySets('3'); setNewActivityReps('10')
+    setNewActivityDuration(''); setNewActivityRepType('reps'); setNewActivityVideo(false)
   }
 
   function removeActivity(sessionIndex, actIndex) {
@@ -112,23 +156,20 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     if (!progName.trim() || !studentEmail.trim()) { alert('Fill in programme name and student email!'); return }
     if (sessions.length === 0) { alert('Add at least one session!'); return }
     setSaving(true)
-
     const endDate = repeatWeekly && startDate
       ? new Date(new Date(startDate).getTime() + repeatWeeks * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       : startDate
-
     const { error } = await supabase.from('programmes').insert([{
       coach_id: userId,
       student_email: studentEmail.trim().toLowerCase(),
       name: progName.trim(),
       due_date: endDate,
       activities: sessions[0]?.activities || [],
-      sessions: sessions,
+      sessions,
       repeat_weekly: repeatWeekly,
       repeat_weeks: repeatWeeks,
       end_date: endDate,
     }])
-
     if (error) { alert('Error saving: ' + error.message); setSaving(false); return }
     setShowCreate(false)
     resetCreateForm()
@@ -142,31 +183,82 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     setSessionLabelType('numbered'); setActiveSessionIndex(null)
   }
 
-  function toggleActivity(progId, sessionIdx, actIdx) {
+  async function toggleActivity(progId, sessionIdx, actIdx) {
     const key = `${progId}-${sessionIdx}-${actIdx}`
-    const current = completedActivities[key]
-    setCompletedActivities({ ...completedActivities, [key]: !current })
+    const isDone = !!completedActivities[key]
+    const newValue = !isDone
+
+    // Update locally immediately so UI feels instant
+    setCompletedActivities(prev => ({ ...prev, [key]: newValue }))
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('activity_progress')
+      .upsert({
+        student_id: userId,
+        programme_id: progId,
+        session_index: sessionIdx,
+        activity_index: actIdx,
+        completed: newValue,
+      }, { onConflict: 'student_id,programme_id,session_index,activity_index' })
+
+    if (error) {
+      console.error('Error saving progress:', error.message)
+      // Revert if save failed
+      setCompletedActivities(prev => ({ ...prev, [key]: isDone }))
+    }
   }
 
   function isActivityDone(progId, sessionIdx, actIdx) {
     return !!completedActivities[`${progId}-${sessionIdx}-${actIdx}`]
   }
 
+  async function handleVideoUpload(progId, sessionIdx, actIdx, file) {
+    const key = `${progId}-${sessionIdx}-${actIdx}`
+    setUploadingVideos(prev => ({ ...prev, [key]: true }))
+
+    const filePath = `${userId}/${progId}/${sessionIdx}/${actIdx}/${Date.now()}-${file.name}`
+    const { error } = await supabase.storage.from('videos').upload(filePath, file, { upsert: true })
+
+    if (error) {
+      alert('Error uploading video: ' + error.message)
+      setUploadingVideos(prev => ({ ...prev, [key]: false }))
+      return
+    }
+
+    const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filePath)
+    setUploadedVideos(prev => ({ ...prev, [key]: { name: file.name, url: urlData.publicUrl } }))
+    setUploadingVideos(prev => ({ ...prev, [key]: false }))
+  }
+
   async function handleSubmitSession(progId, sessionIdx) {
-    const key = `${progId}-${sessionIdx}`
-    const sessions_data = selectedProg?.sessions || []
-    const acts = sessions_data[sessionIdx]?.activities || []
+    const progSessions = selectedProg?.sessions?.length > 0
+      ? selectedProg.sessions
+      : [{ name: 'Session 1', activities: selectedProg?.activities || [] }]
+    const acts = progSessions[sessionIdx]?.activities || []
     const completed = acts.map((_, i) => isActivityDone(progId, sessionIdx, i) ? i : null).filter(i => i !== null)
+
     if (completed.length === 0) { alert('Tick off at least one activity!'); return }
+
+    const videoUrls = {}
+    Object.keys(uploadedVideos).forEach(key => {
+      if (key.startsWith(`${progId}-${sessionIdx}-`)) {
+        const actIdx = key.split('-')[2]
+        videoUrls[actIdx] = uploadedVideos[key].url
+      }
+    })
 
     const { error } = await supabase.from('submissions').insert([{
       programme_id: progId,
       student_id: userId,
-      notes: notes[key] || '',
+      notes: notes[`${progId}-${sessionIdx}`] || '',
       completed_activities: completed,
+      video_urls: videoUrls,
+      session_index: sessionIdx,
     }])
+
     if (error) { alert('Error: ' + error.message); return }
-    setSubmitted({ ...submitted, [key]: true })
+    setSubmitted(prev => ({ ...prev, [`${progId}-${sessionIdx}`]: true }))
   }
 
   function handleBack() {
@@ -175,7 +267,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     if (onClearProgramme) onClearProgramme()
   }
 
-  // ── CREATE FORM ──────────────────────────────────────────────
+  // ── CREATE FORM ───────────────────────────────────────────────
   if (showCreate) {
     return (
       <div style={{ backgroundColor: '#0a0a0a', minHeight: '100vh', color: 'white' }}>
@@ -185,102 +277,54 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
         </div>
 
         <div style={{ padding: '0 20px 100px 20px' }}>
-
-          {/* Basic info */}
           <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
             <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>Programme Details</div>
-
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px' }}>Programme name</label>
               <input value={progName} onChange={e => setProgName(e.target.value)} placeholder="e.g. Pre-season Block" style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
             </div>
-
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px' }}>Student email</label>
               <input value={studentEmail} onChange={e => setStudentEmail(e.target.value)} placeholder="student@email.com" style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
             </div>
-
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px' }}>Start date</label>
               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
             </div>
           </div>
 
-          {/* Repeat weekly */}
           <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: repeatWeekly ? '16px' : '0' }}>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600' }}>Repeat weekly</div>
                 <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>Same sessions repeat each week</div>
               </div>
-              <button
-                onClick={() => setRepeatWeekly(!repeatWeekly)}
-                style={{
-                  width: '48px', height: '28px', borderRadius: '14px',
-                  backgroundColor: repeatWeekly ? '#1D9E75' : '#222',
-                  border: 'none', cursor: 'pointer', position: 'relative', transition: 'all 0.2s'
-                }}
-              >
-                <div style={{
-                  width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'white',
-                  position: 'absolute', top: '3px',
-                  left: repeatWeekly ? '23px' : '3px', transition: 'left 0.2s'
-                }} />
+              <button onClick={() => setRepeatWeekly(!repeatWeekly)} style={{ width: '48px', height: '28px', borderRadius: '14px', backgroundColor: repeatWeekly ? '#1D9E75' : '#222', border: 'none', cursor: 'pointer', position: 'relative', transition: 'all 0.2s' }}>
+                <div style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'white', position: 'absolute', top: '3px', left: repeatWeekly ? '23px' : '3px', transition: 'left 0.2s' }} />
               </button>
             </div>
-
             {repeatWeekly && (
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '8px' }}>Number of weeks</label>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {[2, 4, 6, 8, 12, 16].map(w => (
-                    <button
-                      key={w}
-                      onClick={() => setRepeatWeeks(w)}
-                      style={{
-                        padding: '8px 16px', borderRadius: '20px',
-                        border: `1px solid ${repeatWeeks === w ? '#1D9E75' : '#222'}`,
-                        backgroundColor: repeatWeeks === w ? 'rgba(29,158,117,0.15)' : 'transparent',
-                        color: repeatWeeks === w ? '#1D9E75' : '#555',
-                        fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                      }}
-                    >
-                      {w}w
-                    </button>
+                    <button key={w} onClick={() => setRepeatWeeks(w)} style={{ padding: '8px 16px', borderRadius: '20px', border: `1px solid ${repeatWeeks === w ? '#1D9E75' : '#222'}`, backgroundColor: repeatWeeks === w ? 'rgba(29,158,117,0.15)' : 'transparent', color: repeatWeeks === w ? '#1D9E75' : '#555', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>{w}w</button>
                   ))}
                 </div>
-                {startDate && (
-                  <div style={{ fontSize: '12px', color: '#1D9E75', marginTop: '10px' }}>
-                    📅 Ends {new Date(new Date(startDate).getTime() + repeatWeeks * 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-AU')}
-                  </div>
-                )}
+                {startDate && <div style={{ fontSize: '12px', color: '#1D9E75', marginTop: '10px' }}>📅 Ends {new Date(new Date(startDate).getTime() + repeatWeeks * 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-AU')}</div>}
               </div>
             )}
           </div>
 
-          {/* Session label type */}
           <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
             <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Session Labels</div>
             <div style={{ display: 'flex', gap: '8px' }}>
               {[{ id: 'numbered', label: '1, 2, 3...' }, { id: 'days', label: 'Mon, Tue...' }].map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => setSessionLabelType(opt.id)}
-                  style={{
-                    flex: 1, padding: '10px',
-                    border: `1px solid ${sessionLabelType === opt.id ? '#1D9E75' : '#222'}`,
-                    backgroundColor: sessionLabelType === opt.id ? 'rgba(29,158,117,0.15)' : 'transparent',
-                    color: sessionLabelType === opt.id ? '#1D9E75' : '#555',
-                    borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                  }}
-                >
-                  {opt.label}
-                </button>
+                <button key={opt.id} onClick={() => setSessionLabelType(opt.id)} style={{ flex: 1, padding: '10px', border: `1px solid ${sessionLabelType === opt.id ? '#1D9E75' : '#222'}`, backgroundColor: sessionLabelType === opt.id ? 'rgba(29,158,117,0.15)' : 'transparent', color: sessionLabelType === opt.id ? '#1D9E75' : '#555', borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>{opt.label}</button>
               ))}
             </div>
           </div>
 
-          {/* Sessions */}
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>Sessions ({sessions.length})</div>
@@ -288,10 +332,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
             {sessions.map((session, si) => (
               <div key={si} style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #1a1a1a', marginBottom: '10px', overflow: 'hidden' }}>
-                <div
-                  onClick={() => setActiveSessionIndex(activeSessionIndex === si ? null : si)}
-                  style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-                >
+                <div onClick={() => setActiveSessionIndex(activeSessionIndex === si ? null : si)} style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
                   <div>
                     <div style={{ fontSize: '14px', fontWeight: '700' }}>{session.name}</div>
                     <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{session.activities.length} activities</div>
@@ -314,10 +355,8 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                       </div>
                     ))}
 
-                    {/* Add activity */}
                     <div style={{ backgroundColor: '#0a0a0a', borderRadius: '12px', padding: '14px', marginTop: '10px', border: '1px dashed #222' }}>
                       <input value={newActivityName} onChange={e => setNewActivityName(e.target.value)} placeholder="Activity name e.g. Push-ups" style={{ width: '100%', padding: '10px 12px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '8px', color: 'white', fontSize: '13px', outline: 'none', fontFamily: 'inherit', marginBottom: '8px' }} />
-
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                         <select value={newActivitySets} onChange={e => setNewActivitySets(e.target.value)} style={{ flex: 1, padding: '8px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '8px', color: 'white', fontSize: '12px', outline: 'none' }}>
                           {Array.from({length: 10}, (_, i) => i + 1).map(n => <option key={n} value={n}>{n} set{n > 1 ? 's' : ''}</option>)}
@@ -342,7 +381,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                           <div style={{ flex: 1, padding: '8px', backgroundColor: 'rgba(29,158,117,0.1)', borderRadius: '8px', fontSize: '11px', color: '#1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600' }}>AMRAP</div>
                         )}
                       </div>
-
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#555', cursor: 'pointer' }}>
                           <input type="checkbox" checked={newActivityVideo} onChange={e => setNewActivityVideo(e.target.checked)} />
@@ -356,7 +394,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
               </div>
             ))}
 
-            {/* Add session button */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {sessionLabelType === 'days' && (
                 <select value={newSessionName} onChange={e => setNewSessionName(e.target.value)} style={{ flex: 1, padding: '12px 14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '12px', color: 'white', fontSize: '13px', outline: 'none' }}>
@@ -364,21 +401,11 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                   {days.filter(d => !sessions.find(s => s.name === d)).map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               )}
-              <button
-                onClick={addSession}
-                style={{ flex: sessionLabelType === 'days' ? 'none' : 1, padding: '12px 20px', backgroundColor: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: '12px', color: '#1D9E75', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-              >
-                + Add Session
-              </button>
+              <button onClick={addSession} style={{ flex: sessionLabelType === 'days' ? 'none' : 1, padding: '12px 20px', backgroundColor: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: '12px', color: '#1D9E75', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>+ Add Session</button>
             </div>
           </div>
 
-          {/* Save */}
-          <button
-            onClick={saveProgamme}
-            disabled={saving}
-            style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '14px', color: 'white', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginTop: '8px' }}
-          >
+          <button onClick={saveProgamme} disabled={saving} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '14px', color: 'white', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginTop: '8px' }}>
             {saving ? 'Saving...' : '✓ Save Programme'}
           </button>
         </div>
@@ -388,14 +415,15 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
   // ── PROGRAMME DETAIL (sessions list) ─────────────────────────
   if (selectedProg && selectedSession === null) {
-    const progSessions = selectedProg.sessions?.length > 0 ? selectedProg.sessions : (selectedProg.activities?.length > 0 ? [{ name: 'Session 1', activities: selectedProg.activities }] : [])
+    const progSessions = selectedProg.sessions?.length > 0
+      ? selectedProg.sessions
+      : (selectedProg.activities?.length > 0 ? [{ name: 'Session 1', activities: selectedProg.activities }] : [])
 
     return (
       <div style={{ backgroundColor: '#0a0a0a', minHeight: '100vh', color: 'white' }}>
         <div style={{ padding: '56px 20px 16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={handleBack} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' }}>← Back</button>
         </div>
-
         <div style={{ padding: '0 20px' }}>
           <div style={{ marginBottom: '6px' }}>
             <div style={{ fontSize: '24px', fontWeight: '800', marginBottom: '4px' }}>{selectedProg.name}</div>
@@ -405,7 +433,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           </div>
 
           <div style={{ marginTop: '20px' }}>
-            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Sessions this week</div>
+            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Sessions</div>
 
             {progSessions.length === 0 ? (
               <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #1a1a1a', color: '#555' }}>No sessions added yet</div>
@@ -417,11 +445,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                 const progress = acts.length > 0 ? Math.round((doneCount / acts.length) * 100) : 0
 
                 return (
-                  <div
-                    key={si}
-                    onClick={() => setSelectedSession(si)}
-                    style={{ backgroundColor: '#111', borderRadius: '16px', padding: '18px 20px', marginBottom: '10px', border: `1px solid ${isSubmittedSession ? 'rgba(29,158,117,0.4)' : '#1a1a1a'}`, cursor: 'pointer' }}
-                  >
+                  <div key={si} onClick={() => setSelectedSession(si)} style={{ backgroundColor: '#111', borderRadius: '16px', padding: '18px 20px', marginBottom: '10px', border: `1px solid ${isSubmittedSession ? 'rgba(29,158,117,0.4)' : '#1a1a1a'}`, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                       <div>
                         <div style={{ fontSize: '15px', fontWeight: '700' }}>{session.name}</div>
@@ -447,7 +471,9 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
   // ── SESSION DETAIL (activities) ───────────────────────────────
   if (selectedProg && selectedSession !== null) {
-    const progSessions = selectedProg.sessions?.length > 0 ? selectedProg.sessions : [{ name: 'Session 1', activities: selectedProg.activities || [] }]
+    const progSessions = selectedProg.sessions?.length > 0
+      ? selectedProg.sessions
+      : [{ name: 'Session 1', activities: selectedProg.activities || [] }]
     const session = progSessions[selectedSession]
     const acts = session?.activities || []
     const isSubmittedSession = submitted[`${selectedProg.id}-${selectedSession}`]
@@ -462,8 +488,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           <div style={{ fontSize: '16px', fontWeight: '700' }}>{session?.name}</div>
         </div>
 
-        <div style={{ padding: '0 20px' }}>
-          {/* Progress */}
+        <div style={{ padding: '0 20px 40px 20px' }}>
           <div style={{ backgroundColor: '#111', borderRadius: '14px', padding: '16px', marginBottom: '16px', border: '1px solid #1a1a1a' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span style={{ fontSize: '13px', color: '#aaa' }}>Progress</span>
@@ -474,40 +499,50 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
             </div>
           </div>
 
-          {/* Activities */}
           {acts.map((act, ai) => {
             const isDone = isActivityDone(selectedProg.id, selectedSession, ai)
+            const key = `${selectedProg.id}-${selectedSession}-${ai}`
+            const isUploading = uploadingVideos[key]
+            const videoUploaded = uploadedVideos[key]
+
             return (
-              <div
-                key={ai}
-                onClick={() => !isSubmittedSession && toggleActivity(selectedProg.id, selectedSession, ai)}
-                style={{
-                  backgroundColor: isDone ? 'rgba(29,158,117,0.1)' : '#111',
-                  border: `1px solid ${isDone ? 'rgba(29,158,117,0.4)' : '#1a1a1a'}`,
-                  borderRadius: '14px', padding: '16px', marginBottom: '10px',
-                  cursor: isSubmittedSession ? 'default' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '14px', transition: 'all 0.15s'
-                }}
-              >
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  border: `2px solid ${isDone ? '#1D9E75' : '#333'}`,
-                  backgroundColor: isDone ? '#1D9E75' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, fontSize: '13px', color: 'white'
-                }}>
-                  {isDone && '✓'}
+              <div key={ai} style={{ backgroundColor: isDone ? 'rgba(29,158,117,0.1)' : '#111', border: `1px solid ${isDone ? 'rgba(29,158,117,0.4)' : '#1a1a1a'}`, borderRadius: '14px', padding: '16px', marginBottom: '10px', transition: 'all 0.15s' }}>
+                <div onClick={() => !isSubmittedSession && toggleActivity(selectedProg.id, selectedSession, ai)} style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: isSubmittedSession ? 'default' : 'pointer' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: `2px solid ${isDone ? '#1D9E75' : '#333'}`, backgroundColor: isDone ? '#1D9E75' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '13px', color: 'white' }}>
+                    {isDone && '✓'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: isDone ? '#1D9E75' : 'white' }}>{act.name}</div>
+                    <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{act.detail}</div>
+                  </div>
+                  {act.requiresVideo && <span style={{ fontSize: '10px', backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '3px 8px', borderRadius: '20px', fontWeight: '600', border: '1px solid rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}>📹 VIDEO</span>}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: isDone ? '#1D9E75' : 'white' }}>{act.name}</div>
-                  <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{act.detail}</div>
-                </div>
-                {act.requiresVideo && <span style={{ fontSize: '10px', backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '3px 8px', borderRadius: '20px', fontWeight: '600', border: '1px solid rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}>📹 VIDEO</span>}
+
+                {/* Video upload — only show when activity is done and video required */}
+                {role === 'student' && act.requiresVideo && isDone && !isSubmittedSession && (
+                  <div style={{ marginTop: '12px', paddingLeft: '42px' }}>
+                    {isUploading ? (
+                      <div style={{ fontSize: '13px', color: '#1D9E75' }}>⏳ Uploading...</div>
+                    ) : videoUploaded ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', color: '#1D9E75', fontWeight: '500' }}>✅ {videoUploaded.name}</span>
+                        <label htmlFor={`vid-${key}`} style={{ fontSize: '12px', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>Change</label>
+                        <input id={`vid-${key}`} type="file" accept="video/*" capture="camcorder" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) handleVideoUpload(selectedProg.id, selectedSession, ai, e.target.files[0]) }} />
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor={`vid-${key}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#f59e0b', fontWeight: '600' }}>
+                          📹 Upload video
+                        </label>
+                        <input id={`vid-${key}`} type="file" accept="video/*" capture="camcorder" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) handleVideoUpload(selectedProg.id, selectedSession, ai, e.target.files[0]) }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
 
-          {/* Submit (students only) */}
           {role === 'student' && !isSubmittedSession && (
             <div style={{ marginTop: '16px' }}>
               <textarea
@@ -516,10 +551,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                 onChange={e => setNotes({ ...notes, [noteKey]: e.target.value })}
                 style={{ width: '100%', padding: '14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '12px', color: 'white', fontSize: '14px', outline: 'none', resize: 'none', minHeight: '80px', fontFamily: 'inherit', marginBottom: '12px' }}
               />
-              <button
-                onClick={() => handleSubmitSession(selectedProg.id, selectedSession)}
-                style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '14px', color: 'white', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}
-              >
+              <button onClick={() => handleSubmitSession(selectedProg.id, selectedSession)} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '14px', color: 'white', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
                 Submit Session →
               </button>
             </div>
@@ -546,10 +578,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           <div style={{ fontSize: '14px', color: '#555', marginTop: '2px' }}>{role === 'coach' ? 'Your programmes' : 'Your training'}</div>
         </div>
         {role === 'coach' && (
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{ padding: '10px 18px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '12px', color: 'white', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-          >
+          <button onClick={() => setShowCreate(true)} style={{ padding: '10px 18px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '12px', color: 'white', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
             + Create
           </button>
         )}
@@ -566,15 +595,13 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           </div>
         ) : (
           programmes.map((prog, i) => {
-            const progSessions = prog.sessions?.length > 0 ? prog.sessions : (prog.activities?.length > 0 ? [{ name: 'Session 1', activities: prog.activities }] : [])
+            const progSessions = prog.sessions?.length > 0
+              ? prog.sessions
+              : (prog.activities?.length > 0 ? [{ name: 'Session 1', activities: prog.activities }] : [])
             const displayName = role === 'coach' ? (studentNames[prog.student_email] || prog.student_email) : null
 
             return (
-              <div
-                key={i}
-                onClick={() => setSelectedProg(prog)}
-                style={{ backgroundColor: '#111', borderRadius: '20px', padding: '20px', marginBottom: '12px', border: '1px solid #1a1a1a', cursor: 'pointer' }}
-              >
+              <div key={i} onClick={() => setSelectedProg(prog)} style={{ backgroundColor: '#111', borderRadius: '20px', padding: '20px', marginBottom: '12px', border: '1px solid #1a1a1a', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                   <div>
                     <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>{prog.name}</div>
