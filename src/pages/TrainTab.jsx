@@ -8,13 +8,13 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   const [selectedSession, setSelectedSession] = useState(null)
   const [completedActivities, setCompletedActivities] = useState({})
   const [submitted, setSubmitted] = useState({})
+  const [submissionData, setSubmissionData] = useState({})
   const [notes, setNotes] = useState({})
   const [showCreate, setShowCreate] = useState(false)
   const [studentNames, setStudentNames] = useState({})
   const [uploadedVideos, setUploadedVideos] = useState({})
   const [uploadingVideos, setUploadingVideos] = useState({})
 
-  // Create form state
   const [progName, setProgName] = useState('')
   const [studentEmail, setStudentEmail] = useState('')
   const [repeatWeekly, setRepeatWeekly] = useState(false)
@@ -41,7 +41,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
   useEffect(() => { loadProgrammes() }, [userId])
 
-  // Load progress from Supabase when student opens a programme
   useEffect(() => {
     if (role === 'student' && selectedProg) {
       loadProgress(selectedProg.id)
@@ -76,12 +75,14 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
 
     if (data) {
       const map = {}
+      const dataMap = {}
       data.forEach(row => {
-        // Each submission has a session_index if we saved it, otherwise use 0
         const si = row.session_index ?? 0
         map[`${programmeId}-${si}`] = true
+        dataMap[`${programmeId}-${si}`] = row
       })
       setSubmitted(prev => ({ ...prev, ...map }))
+      setSubmissionData(prev => ({ ...prev, ...dataMap }))
     }
   }
 
@@ -187,11 +188,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     const key = `${progId}-${sessionIdx}-${actIdx}`
     const isDone = !!completedActivities[key]
     const newValue = !isDone
-
-    // Update locally immediately so UI feels instant
     setCompletedActivities(prev => ({ ...prev, [key]: newValue }))
-
-    // Save to Supabase
     const { error } = await supabase
       .from('activity_progress')
       .upsert({
@@ -201,10 +198,8 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
         activity_index: actIdx,
         completed: newValue,
       }, { onConflict: 'student_id,programme_id,session_index,activity_index' })
-
     if (error) {
       console.error('Error saving progress:', error.message)
-      // Revert if save failed
       setCompletedActivities(prev => ({ ...prev, [key]: isDone }))
     }
   }
@@ -216,16 +211,13 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   async function handleVideoUpload(progId, sessionIdx, actIdx, file) {
     const key = `${progId}-${sessionIdx}-${actIdx}`
     setUploadingVideos(prev => ({ ...prev, [key]: true }))
-
     const filePath = `${userId}/${progId}/${sessionIdx}/${actIdx}/${Date.now()}-${file.name}`
     const { error } = await supabase.storage.from('videos').upload(filePath, file, { upsert: true })
-
     if (error) {
       alert('Error uploading video: ' + error.message)
       setUploadingVideos(prev => ({ ...prev, [key]: false }))
       return
     }
-
     const { data: urlData } = supabase.storage.from('videos').getPublicUrl(filePath)
     setUploadedVideos(prev => ({ ...prev, [key]: { name: file.name, url: urlData.publicUrl } }))
     setUploadingVideos(prev => ({ ...prev, [key]: false }))
@@ -237,7 +229,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
       : [{ name: 'Session 1', activities: selectedProg?.activities || [] }]
     const acts = progSessions[sessionIdx]?.activities || []
     const completed = acts.map((_, i) => isActivityDone(progId, sessionIdx, i) ? i : null).filter(i => i !== null)
-
     if (completed.length === 0) { alert('Tick off at least one activity!'); return }
 
     const videoUrls = {}
@@ -256,9 +247,9 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
       video_urls: videoUrls,
       session_index: sessionIdx,
     }])
-
     if (error) { alert('Error: ' + error.message); return }
     setSubmitted(prev => ({ ...prev, [`${progId}-${sessionIdx}`]: true }))
+    setSubmissionData(prev => ({ ...prev, [`${progId}-${sessionIdx}`]: { coach_feedback: null } }))
   }
 
   function handleBack() {
@@ -326,9 +317,7 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>Sessions ({sessions.length})</div>
-            </div>
+            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Sessions ({sessions.length})</div>
 
             {sessions.map((session, si) => (
               <div key={si} style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #1a1a1a', marginBottom: '10px', overflow: 'hidden' }}>
@@ -518,7 +507,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                   {act.requiresVideo && <span style={{ fontSize: '10px', backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '3px 8px', borderRadius: '20px', fontWeight: '600', border: '1px solid rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}>📹 VIDEO</span>}
                 </div>
 
-                {/* Video upload — only show when activity is done and video required */}
                 {role === 'student' && act.requiresVideo && isDone && !isSubmittedSession && (
                   <div style={{ marginTop: '12px', paddingLeft: '42px' }}>
                     {isUploading ? (
@@ -558,10 +546,23 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
           )}
 
           {isSubmittedSession && (
-            <div style={{ backgroundColor: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: '14px', padding: '24px', textAlign: 'center', marginTop: '16px' }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
-              <div style={{ fontSize: '16px', fontWeight: '700', color: '#1D9E75' }}>Session submitted!</div>
-              <div style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>Your coach will review and get back to you</div>
+            <div style={{ marginTop: '16px' }}>
+              <div style={{ backgroundColor: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: '14px', padding: '20px', textAlign: 'center', marginBottom: '12px' }}>
+                <div style={{ fontSize: '28px', marginBottom: '6px' }}>✅</div>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#1D9E75' }}>Session submitted!</div>
+                <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>Your coach will review and get back to you</div>
+              </div>
+
+              {submissionData[noteKey]?.coach_feedback ? (
+                <div style={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '10px' }}>💬 Coach feedback</div>
+                  <div style={{ fontSize: '14px', color: 'white', lineHeight: '1.6' }}>{submissionData[noteKey].coach_feedback}</div>
+                </div>
+              ) : (
+                <div style={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: '14px', padding: '16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '13px', color: '#555' }}>⏳ Waiting for coach feedback...</div>
+                </div>
+              )}
             </div>
           )}
         </div>
