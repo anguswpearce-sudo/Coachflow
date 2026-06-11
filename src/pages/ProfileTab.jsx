@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import PersonalBests from './PersonalBests'
 
 function ProfileTab({ userId, role, onSignOut }) {
   const [profile, setProfile] = useState(null)
@@ -197,7 +198,8 @@ function ProfileTab({ userId, role, onSignOut }) {
             )}
           </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
+          {/* Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
             {(role === 'coach' ? [
               { label: 'Programmes', value: stats.programmes, icon: '📋' },
               { label: 'Students', value: stats.students, icon: '👥' },
@@ -214,6 +216,9 @@ function ProfileTab({ userId, role, onSignOut }) {
               </div>
             ))}
           </div>
+
+          {/* Personal Bests */}
+          {role === 'student' && <PersonalBests userId={userId} />}
 
           {/* Student extras */}
           {role === 'student' && profile?.goals && (
