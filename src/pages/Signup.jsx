@@ -4,34 +4,57 @@ import { supabase } from '../supabase'
 function Signup({ onSwitch }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [role, setRole] = useState('student')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [isError, setIsError] = useState(false)
 
   async function handleSignup() {
-    if (email === '' || password === '') {
-      alert('Please fill in all fields!')
+    if (email === '' || password === '' || confirmPassword === '') {
+      setMessage('Please fill in all fields!')
+      setIsError(true)
       return
     }
+    if (password !== confirmPassword) {
+      setMessage('Passwords do not match!')
+      setIsError(true)
+      return
+    }
+    if (password.length < 6) {
+      setMessage('Password must be at least 6 characters!')
+      setIsError(true)
+      return
+    }
+
     setLoading(true)
+    setMessage('')
+
     const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
     })
+
     if (error) {
       setMessage('Error: ' + error.message)
+      setIsError(true)
       setLoading(false)
       return
     }
+
     const { error: profileError } = await supabase
       .from('profiles')
       .insert([{ id: data.user.id, email: email, role: role }])
+
     if (profileError) {
       setMessage('Error saving profile: ' + profileError.message)
+      setIsError(true)
       setLoading(false)
       return
     }
+
     setMessage('Account created! You can now sign in!')
+    setIsError(false)
     setLoading(false)
   }
 
@@ -120,6 +143,35 @@ function Signup({ onSwitch }) {
             />
           </div>
 
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: 'rgba(255,255,255,0.7)',
+              marginBottom: '8px'
+            }}>
+              Confirm password
+            </label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                fontSize: '14px',
+                color: 'white',
+                outline: 'none',
+              }}
+            />
+          </div>
+
           <div style={{ marginBottom: '28px' }}>
             <label style={{
               display: 'block',
@@ -182,8 +234,9 @@ function Signup({ onSwitch }) {
               borderRadius: '10px',
               fontSize: '15px',
               fontWeight: '600',
-              cursor: 'pointer',
-              letterSpacing: '0.3px'
+              cursor: loading ? 'default' : 'pointer',
+              letterSpacing: '0.3px',
+              opacity: loading ? 0.7 : 1,
             }}
           >
             {loading ? 'Creating account...' : 'Create account →'}
@@ -193,11 +246,11 @@ function Signup({ onSwitch }) {
             <div style={{
               marginTop: '16px',
               padding: '12px 16px',
-              backgroundColor: 'rgba(78,204,163,0.15)',
-              border: '1px solid rgba(78,204,163,0.3)',
+              backgroundColor: isError ? 'rgba(244,63,94,0.15)' : 'rgba(78,204,163,0.15)',
+              border: `1px solid ${isError ? 'rgba(244,63,94,0.3)' : 'rgba(78,204,163,0.3)'}`,
               borderRadius: '10px',
               fontSize: '13px',
-              color: '#4ECCA3',
+              color: isError ? '#f43f5e' : '#4ECCA3',
               textAlign: 'center'
             }}>
               {message}
