@@ -187,35 +187,42 @@ function HomeTab({ userId, role, onSignOut, onNavigate, onOpenProgramme }) {
             <div style={{ fontSize: '14px', color: '#555' }}>No activity yet — get started!</div>
           </div>
         ) : (
-          feed.map((item, i) => (
-            <div
-              key={i}
-              onClick={item.type === 'message' ? () => setShowMessages(true) : undefined}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
-                padding: '12px 14px',
-                backgroundColor: '#111',
-                borderRadius: '14px',
-                marginBottom: '8px',
-                border: '1px solid #1a1a1a',
-                cursor: item.type === 'message' ? 'pointer' : 'default',
-              }}
-            >
-              <div style={{
-                width: '38px', height: '38px', borderRadius: '50%',
-                backgroundColor: item.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '16px', flexShrink: 0
-              }}>
-                {item.emoji}
+          feed.map((item, i) => {
+            const isClickable = item.type === 'message' || item.type === 'programme'
+            return (
+              <div
+                key={i}
+                onClick={
+                  item.type === 'message' ? () => setShowMessages(true) :
+                  item.type === 'programme' ? () => onNavigate('train') :
+                  undefined
+                }
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                  padding: '12px 14px',
+                  backgroundColor: '#111',
+                  borderRadius: '14px',
+                  marginBottom: '8px',
+                  border: '1px solid #1a1a1a',
+                  cursor: isClickable ? 'pointer' : 'default',
+                }}
+              >
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '50%',
+                  backgroundColor: item.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '16px', flexShrink: 0
+                }}>
+                  {item.emoji}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: 'white', marginBottom: '2px' }}>{item.text}</div>
+                  <div style={{ fontSize: '11px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.sub}</div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#444', flexShrink: 0 }}>{timeAgo(item.time)}</div>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', color: 'white', marginBottom: '2px' }}>{item.text}</div>
-                <div style={{ fontSize: '11px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.sub}</div>
-              </div>
-              <div style={{ fontSize: '11px', color: '#444', flexShrink: 0 }}>{timeAgo(item.time)}</div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 
@@ -253,12 +260,9 @@ function HomeTab({ userId, role, onSignOut, onNavigate, onOpenProgramme }) {
                   {role === 'coach' ? `👤 ${prog.student_email}` : `📅 Due ${prog.due_date || 'No date'}`}
                 </div>
               </div>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                backgroundColor: 'rgba(29,158,117,0.15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '14px', color: '#1D9E75', fontWeight: '700'
-              }}>→</div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
             </div>
           ))
         )}
@@ -282,7 +286,7 @@ function HomeTab({ userId, role, onSignOut, onNavigate, onOpenProgramme }) {
         </div>
       </div>
 
-</div>
+    </div>
   )
 }
 

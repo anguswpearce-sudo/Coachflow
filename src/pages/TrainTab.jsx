@@ -440,10 +440,15 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                         <div style={{ fontSize: '15px', fontWeight: '700' }}>{session.name}</div>
                         <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{acts.length} activities</div>
                       </div>
-                      {isSubmittedSession
-                        ? <span style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '700', backgroundColor: 'rgba(29,158,117,0.1)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(29,158,117,0.3)' }}>✓ Done</span>
-                        : <span style={{ fontSize: '13px', fontWeight: '700', color: progress > 0 ? '#1D9E75' : '#555' }}>{progress}%</span>
-                      }
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {isSubmittedSession
+                          ? <span style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '700', backgroundColor: 'rgba(29,158,117,0.1)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(29,158,117,0.3)' }}>✓ Done</span>
+                          : <span style={{ fontSize: '13px', fontWeight: '700', color: progress > 0 ? '#1D9E75' : '#555' }}>{progress}%</span>
+                        }
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                      </div>
                     </div>
                     <div style={{ height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', backgroundColor: isSubmittedSession ? '#1D9E75' : '#333', borderRadius: '2px', width: isSubmittedSession ? '100%' : `${progress}%`, transition: 'width 0.3s' }} />
@@ -609,9 +614,14 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                     {displayName && <div style={{ fontSize: '12px', color: '#555' }}>👤 {displayName}</div>}
                     {!displayName && <div style={{ fontSize: '12px', color: '#555' }}>📅 Due {prog.due_date || 'No date'}</div>}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {prog.repeat_weekly && <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600' }}>🔁 {prog.repeat_weeks}w</div>}
-                    <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{progSessions.length} sessions</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      {prog.repeat_weekly && <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600' }}>🔁 {prog.repeat_weeks}w</div>}
+                      <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{progSessions.length} sessions</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
