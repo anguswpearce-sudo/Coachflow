@@ -14,9 +14,7 @@ function PublicCoachProfile() {
   const [messageSent, setMessageSent] = useState(false)
   const [sending, setSending] = useState(false)
 
-  useEffect(() => {
-    loadProfile()
-  }, [id])
+  useEffect(() => { loadProfile() }, [id])
 
   async function loadProfile() {
     const { data, error } = await supabase
@@ -24,12 +22,8 @@ function PublicCoachProfile() {
       .select('*')
       .eq('id', id)
       .single()
-
-    if (error || !data) {
-      setNotFound(true)
-    } else {
-      setProfile(data)
-    }
+    if (error || !data) setNotFound(true)
+    else setProfile(data)
     setLoading(false)
   }
 
@@ -41,96 +35,75 @@ function PublicCoachProfile() {
     setSending(true)
     const { error } = await supabase
       .from('contact_messages')
-      .insert([{
-        coach_id: id,
-        sender_name: senderName,
-        sender_email: senderEmail,
-        message: message
-      }])
-
-    if (error) {
-      alert('Error sending message: ' + error.message)
-      setSending(false)
-      return
-    }
+      .insert([{ coach_id: id, sender_name: senderName, sender_email: senderEmail, message }])
+    if (error) { alert('Error sending message: ' + error.message); setSending(false); return }
     setMessageSent(true)
     setSending(false)
   }
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '15px', color: '#888' }}>Loading profile...</div>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px' }}>
+        <span style={{ color: '#1D9E75' }}>coach</span>
+        <span style={{ color: 'white' }}>flow</span>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (notFound) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
-          <div style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px' }}>Profile not found</div>
-          <div style={{ fontSize: '15px', color: '#888' }}>This coach profile doesn't exist or has been removed.</div>
-        </div>
+  if (notFound) return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
+        <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px' }}>Profile not found</div>
+        <div style={{ fontSize: '14px', color: '#555' }}>This coach profile doesn't exist or has been removed.</div>
+        <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 24px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', color: 'white', borderRadius: '12px', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>
+          Go to CoachFlow
+        </a>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F7F7F5' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a', color: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
-      {/* Nav bar */}
-      <div style={{
-        backgroundColor: 'white',
-        borderBottom: '1px solid #eeeeee',
-        padding: '0 32px',
-        height: '60px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>
+      {/* Nav */}
+      <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #111' }}>
+        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px' }}>
           <span style={{ color: '#1D9E75' }}>coach</span>
-          <span style={{ color: '#1a1a1a' }}>flow</span>
+          <span style={{ color: 'white' }}>flow</span>
         </div>
-        <a href="/" style={{
-          padding: '8px 18px',
-          cursor: 'pointer',
-          borderRadius: '8px',
-          border: '1px solid #1D9E75',
-          color: '#1D9E75',
-          fontSize: '13px',
-          fontWeight: '500',
-          backgroundColor: 'white',
-          textDecoration: 'none'
-        }}>
+        <a href="/" style={{ padding: '8px 18px', borderRadius: '10px', border: '1px solid #1D9E75', color: '#1D9E75', fontSize: '13px', fontWeight: '600', textDecoration: 'none' }}>
           Sign in
         </a>
       </div>
 
-      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px 20px 60px 20px' }}>
 
-        {/* Main profile card */}
-        <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', border: '1px solid #eee', marginBottom: '16px' }}>
+        {/* Hero card */}
+        <div style={{ backgroundColor: '#111', borderRadius: '24px', padding: '32px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
 
-          {/* Header */}
+          {/* Avatar + name */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
             <div style={{
-              width: '90px', height: '90px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1D9E75, #0F6E56)',
+              width: '80px', height: '80px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #1D9E75, #0a5c43)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '36px', color: 'white', fontWeight: '700', flexShrink: 0
+              fontSize: '32px', fontWeight: '800', color: 'white', flexShrink: 0,
+              border: '3px solid #1D9E75'
             }}>
-              {profile.name ? profile.name[0].toUpperCase() : '?'}
+              {(profile.name || '?')[0].toUpperCase()}
             </div>
             <div>
-              <h1 style={{ fontSize: '26px', fontWeight: '700', margin: '0 0 6px 0' }}>
-                {profile.name || 'Coach'}
-              </h1>
-              <div style={{ fontSize: '14px', color: '#888', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                {profile.years_experience > 0 && <span>🏋️ {profile.years_experience} years experience</span>}
+              <div style={{ fontSize: '24px', fontWeight: '800', marginBottom: '6px' }}>{profile.name || 'Coach'}</div>
+              <div style={{ fontSize: '13px', color: '#555', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {profile.years_experience > 0 && <span>🏋️ {profile.years_experience} yrs exp</span>}
                 {profile.location && <span>📍 {profile.location}</span>}
+              </div>
+              <div style={{ marginTop: '10px' }}>
+                <span style={{ padding: '4px 12px', backgroundColor: 'rgba(29,158,117,0.15)', color: '#1D9E75', borderRadius: '20px', fontSize: '11px', fontWeight: '700', border: '1px solid rgba(29,158,117,0.3)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  🎯 Coach
+                </span>
               </div>
             </div>
           </div>
@@ -138,18 +111,18 @@ function PublicCoachProfile() {
           {/* Bio */}
           {profile.bio && (
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>About</div>
-              <p style={{ fontSize: '15px', color: '#444', lineHeight: '1.7', margin: 0 }}>{profile.bio}</p>
+              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>About</div>
+              <p style={{ fontSize: '14px', color: '#aaa', lineHeight: '1.7', margin: 0 }}>{profile.bio}</p>
             </div>
           )}
 
           {/* Specialities */}
           {profile.specialities && (
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Specialities</div>
+              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '10px' }}>Specialities</div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {profile.specialities.split(',').map((s, i) => (
-                  <span key={i} style={{ padding: '6px 14px', backgroundColor: '#E1F5EE', color: '#0F6E56', borderRadius: '20px', fontSize: '13px', fontWeight: '500' }}>
+                  <span key={i} style={{ padding: '5px 12px', backgroundColor: 'rgba(29,158,117,0.1)', color: '#1D9E75', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid rgba(29,158,117,0.2)' }}>
                     {s.trim()}
                   </span>
                 ))}
@@ -160,155 +133,106 @@ function PublicCoachProfile() {
           {/* Qualifications */}
           {profile.qualifications && (
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qualifications</div>
-              <p style={{ fontSize: '14px', color: '#444', lineHeight: '1.6', margin: 0 }}>{profile.qualifications}</p>
+              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Qualifications</div>
+              <p style={{ fontSize: '14px', color: '#aaa', lineHeight: '1.6', margin: 0 }}>{profile.qualifications}</p>
             </div>
           )}
 
           {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
             {[
-              { label: 'Experience', value: `${profile.years_experience || 0} yrs`, emoji: '🏋️' },
-              { label: 'Platform', value: 'CoachFlow', emoji: '✅' },
-              { label: 'Status', value: 'Active', emoji: '🟢' },
+              { label: 'Experience', value: `${profile.years_experience || 0}y`, icon: '🏋️' },
+              { label: 'Platform', value: 'CoachFlow', icon: '✅' },
+              { label: 'Status', value: 'Active', icon: '🟢' },
             ].map((stat, i) => (
-              <div key={i} style={{ backgroundColor: '#F7F7F5', borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '20px', marginBottom: '4px' }}>{stat.emoji}</div>
-                <div style={{ fontSize: '15px', fontWeight: '600' }}>{stat.value}</div>
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>{stat.label}</div>
+              <div key={i} style={{ backgroundColor: '#0a0a0a', borderRadius: '14px', padding: '14px 10px', textAlign: 'center', border: '1px solid #1a1a1a' }}>
+                <div style={{ fontSize: '20px', marginBottom: '6px' }}>{stat.icon}</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: 'white' }}>{stat.value}</div>
+                <div style={{ fontSize: '10px', color: '#555', marginTop: '2px' }}>{stat.label}</div>
               </div>
             ))}
           </div>
 
           {/* CTA buttons */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={() => setShowContact(!showContact)}
-              style={{
-                flex: 1,
-                padding: '13px 20px',
-                background: 'linear-gradient(135deg, #1D9E75, #0F6E56)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '15px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                minWidth: '160px'
-              }}
+              style={{ flex: 1, padding: '14px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', color: 'white', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}
             >
               ✉️ Get in touch
             </button>
-            <a href="/" style={{
-              flex: 1,
-              padding: '13px 20px',
-              background: 'linear-gradient(135deg, #0F2027, #2C5364)',
-              color: 'white',
-              borderRadius: '10px',
-              fontSize: '15px',
-              fontWeight: '600',
-              textDecoration: 'none',
-              textAlign: 'center',
-              minWidth: '160px'
-            }}>
-              🚀 Start training →
+            <a href="/" style={{ flex: 1, padding: '14px', backgroundColor: '#1a1a1a', color: '#aaa', borderRadius: '14px', fontSize: '14px', fontWeight: '600', textDecoration: 'none', textAlign: 'center', border: '1px solid #222' }}>
+              🚀 Join CoachFlow
             </a>
           </div>
         </div>
 
         {/* Contact form */}
         {showContact && (
-          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', border: '1px solid #eee', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '6px' }}>
+          <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '28px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>
               Get in touch with {profile.name?.split(' ')[0] || 'this coach'}
-            </h2>
-            <p style={{ fontSize: '14px', color: '#888', marginBottom: '20px' }}>
-              Fill in the form below and they'll get back to you soon!
-            </p>
+            </div>
+            <div style={{ fontSize: '13px', color: '#555', marginBottom: '20px' }}>
+              Fill in the form and they'll get back to you soon!
+            </div>
 
             {messageSent ? (
-              <div style={{ padding: '20px', backgroundColor: '#E1F5EE', borderRadius: '12px', textAlign: 'center' }}>
+              <div style={{ padding: '24px', backgroundColor: 'rgba(29,158,117,0.1)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: '14px', textAlign: 'center' }}>
                 <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
-                <div style={{ fontWeight: '600', fontSize: '16px', color: '#0F6E56' }}>Message sent!</div>
-                <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
-                  {profile.name?.split(' ')[0]} will get back to you soon.
-                </div>
+                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1D9E75' }}>Message sent!</div>
+                <div style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>{profile.name?.split(' ')[0]} will get back to you soon.</div>
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '6px' }}>Your name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Jamie Chen"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
-                  />
-                </div>
+                {[
+                  { label: 'Your name', value: senderName, set: setSenderName, placeholder: 'e.g. Jamie Chen', type: 'text' },
+                  { label: 'Your email', value: senderEmail, set: setSenderEmail, placeholder: 'your@email.com', type: 'email' },
+                ].map((field, i) => (
+                  <div key={i} style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{field.label}</label>
+                    <input type={field.type} placeholder={field.placeholder} value={field.value} onChange={e => field.set(e.target.value)} style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
+                  </div>
+                ))}
 
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '6px' }}>Your email</label>
-                  <input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={senderEmail}
-                    onChange={(e) => setSenderEmail(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #eee', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '6px' }}>Message</label>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Message</label>
                   <textarea
                     placeholder={`Hi ${profile.name?.split(' ')[0] || 'Coach'}, I'm interested in training with you...`}
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1px solid #eee',
-                      borderRadius: '10px', fontSize: '14px', outline: 'none',
-                      minHeight: '120px', resize: 'vertical', fontFamily: 'inherit'
-                    }}
+                    onChange={e => setMessage(e.target.value)}
+                    style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', minHeight: '100px', resize: 'vertical', fontFamily: 'inherit' }}
                   />
                 </div>
 
-                <button
-                  onClick={sendMessage}
-                  disabled={sending}
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    background: 'linear-gradient(135deg, #1D9E75, #0F6E56)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '10px',
-                    fontSize: '15px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {sending ? 'Sending...' : 'Send message →'}
+                <button onClick={sendMessage} disabled={sending} style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                  {sending ? 'Sending...' : 'Send message'}
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Instagram link */}
+        {/* Instagram */}
         {profile.instagram && (
-          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '20px 24px', border: '1px solid #eee', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: '14px', color: '#444' }}>📸 Follow on Instagram</div>
-            <a
-              href={`https://instagram.com/${profile.instagram.replace('@', '')}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ padding: '7px 16px', backgroundColor: '#f0f0f0', borderRadius: '8px', fontSize: '13px', fontWeight: '500', textDecoration: 'none', color: '#333' }}
-            >
+          <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '18px 20px', border: '1px solid #1a1a1a', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: '14px', color: '#aaa' }}>📸 Instagram</div>
+            <a href={`https://instagram.com/${profile.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" style={{ padding: '6px 14px', backgroundColor: '#0a0a0a', borderRadius: '8px', fontSize: '13px', fontWeight: '600', textDecoration: 'none', color: '#1D9E75', border: '1px solid #1a1a1a' }}>
               {profile.instagram}
             </a>
           </div>
         )}
 
+        {/* Join banner */}
+        <div style={{ background: 'linear-gradient(135deg, #0F2027, #203A43, #2C5364)', borderRadius: '20px', padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          <div>
+            <div style={{ color: 'white', fontWeight: '700', fontSize: '15px', marginBottom: '4px' }}>Train with CoachFlow</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}>The platform built for serious athletes</div>
+          </div>
+          <a href="/" style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #4ECCA3, #1D9E75)', color: 'white', borderRadius: '12px', fontSize: '13px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Get started
+          </a>
+        </div>
       </div>
     </div>
   )
