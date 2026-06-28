@@ -14,6 +14,12 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
   const [studentNames, setStudentNames] = useState({})
   const [uploadedVideos, setUploadedVideos] = useState({})
   const [uploadingVideos, setUploadingVideos] = useState({})
+  const [activeSection, setActiveSection] = useState('programmes') // 'programmes' | 'submissions'
+  const [submissions, setSubmissions] = useState([])
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false)
+  const [selectedSubmission, setSelectedSubmission] = useState(null)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [savingFeedback, setSavingFeedback] = useState(false)
 
   const [progName, setProgName] = useState('')
   const [studentEmail, setStudentEmail] = useState('')
@@ -47,6 +53,12 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
       loadSubmissions(selectedProg.id)
     }
   }, [selectedProg])
+
+  useEffect(() => {
+    if (role === 'coach' && activeSection === 'submissions') {
+      loadCoachSubmissions()
+    }
+  }, [activeSection])
 
   async function loadProgress(programmeId) {
     const { data } = await supabase
@@ -86,6 +98,76 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     }
   }
 
+  async function loadCoachSubmissions() {
+    setLoadingSubmissions(true)
+    const { data: progs } = await supabase
+      .from('programmes')
+      .select('id, name, student_email, sessions, activities')
+      .eq('coach_id', userId)
+
+    const progIds = (progs || []).map(p => p.id)
+    if (progIds.length === 0) { setSubmissions([]); setLoadingSubmissions(false); return }
+
+    const { data: subs } = await supabase
+      .from('submissions')
+      .select('*')
+      .in('programme_id', progIds)
+      .order('created_at', { ascending: false })
+
+    const progMap = {}
+    ;(progs || []).forEach(p => { progMap[p.id] = p })
+
+    const enriched = await Promise.all((subs || []).map(async (sub) => {
+      const prog = progMap[sub.programme_id]
+      const { data: sp } = await supabase
+        .from('student_profiles')
+        .select('name')
+        .eq('id', sub.student_id)
+        .single()
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', sub.student_id)
+        .single()
+
+      const progSessions = prog?.sessions?.length > 0
+        ? prog.sessions
+        : [{ name: 'Session 1', activities: prog?.activities || [] }]
+
+      const sessionName = progSessions[sub.session_index ?? 0]?.name || `Session ${(sub.session_index ?? 0) + 1}`
+
+      return {
+        ...sub,
+        programmeName: prog?.name || 'Unknown programme',
+        sessionName,
+        studentName: sp?.name || profile?.email || 'Unknown student',
+        progSessions,
+        prog,
+      }
+    }))
+
+    setSubmissions(enriched)
+    setLoadingSubmissions(false)
+  }
+
+  async function saveFeedback(submissionId) {
+    if (!feedbackText.trim()) return
+    setSavingFeedback(true)
+    const { error } = await supabase
+      .from('submissions')
+      .update({ coach_feedback: feedbackText.trim() })
+      .eq('id', submissionId)
+
+    if (error) { alert('Error saving feedback: ' + error.message); setSavingFeedback(false); return }
+
+    setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, coach_feedback: feedbackText.trim() } : s))
+    setSelectedSubmission(prev => ({ ...prev, coach_feedback: feedbackText.trim() }))
+    setFeedbackText('')
+    setSavingFeedback(false)
+    alert('Feedback sent!')
+  }
+
   async function loadProgrammes() {
     setLoading(true)
     let progs = []
@@ -112,7 +194,10 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     } else {
       const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).single()
       if (prof) {
-        const { data } = await supabase.from('programmes').select('*').eq('student_email', prof.email)
+        const { data } = await supabase
+          .from('programmes')
+          .select('*')
+          .eq('student_email', prof.email)
         progs = data || []
       }
     }
@@ -256,6 +341,109 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
     if (selectedSession !== null) { setSelectedSession(null); return }
     setSelectedProg(null)
     if (onClearProgramme) onClearProgramme()
+  }
+
+  function timeAgo(ts) {
+    const diff = Math.floor((new Date() - new Date(ts)) / 1000)
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
+  }
+
+  // ── SUBMISSION DETAIL (coach) ─────────────────────────────────
+  if (selectedSubmission) {
+    const acts = selectedSubmission.progSessions?.[selectedSubmission.session_index ?? 0]?.activities || []
+
+    return (
+      <div style={{ backgroundColor: '#0a0a0a', minHeight: '100vh', color: 'white' }}>
+        <div style={{ padding: '56px 20px 16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button onClick={() => setSelectedSubmission(null)} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' }}>← Back</button>
+          <div style={{ fontSize: '16px', fontWeight: '700' }}>Submission</div>
+        </div>
+
+        <div style={{ padding: '0 20px 40px 20px' }}>
+          <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
+            <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '4px' }}>{selectedSubmission.studentName}</div>
+            <div style={{ fontSize: '13px', color: '#555', marginBottom: '2px' }}>{selectedSubmission.programmeName} · {selectedSubmission.sessionName}</div>
+            <div style={{ fontSize: '12px', color: '#444' }}>{timeAgo(selectedSubmission.created_at)}</div>
+          </div>
+
+          {/* Completed activities */}
+          <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
+            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Completed Activities</div>
+            {acts.length === 0 ? (
+              <div style={{ fontSize: '13px', color: '#555' }}>No activity data available</div>
+            ) : (
+              acts.map((act, i) => {
+                const isDone = (selectedSubmission.completed_activities || []).includes(i)
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', backgroundColor: isDone ? 'rgba(29,158,117,0.1)' : '#0a0a0a', borderRadius: '10px', marginBottom: '6px', border: `1px solid ${isDone ? 'rgba(29,158,117,0.3)' : '#1a1a1a'}` }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: isDone ? '#1D9E75' : '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', flexShrink: 0 }}>
+                      {isDone ? '✓' : '○'}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: isDone ? '#1D9E75' : '#555' }}>{act.name}</div>
+                      <div style={{ fontSize: '11px', color: '#444' }}>{act.detail}</div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Student notes */}
+          {selectedSubmission.notes && (
+            <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
+              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Student Notes</div>
+              <div style={{ fontSize: '14px', color: '#aaa', lineHeight: '1.6' }}>{selectedSubmission.notes}</div>
+            </div>
+          )}
+
+          {/* Video submissions */}
+          {selectedSubmission.video_urls && Object.keys(selectedSubmission.video_urls).length > 0 && (
+            <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a', marginBottom: '12px' }}>
+              <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>📹 Video Submissions</div>
+              {Object.entries(selectedSubmission.video_urls).map(([actIdx, url]) => (
+                <a key={actIdx} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', padding: '12px 14px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '10px', color: '#f59e0b', fontSize: '13px', fontWeight: '600', textDecoration: 'none', marginBottom: '8px' }}>
+                  📹 View video — Activity {parseInt(actIdx) + 1}
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Coach feedback */}
+          <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1a1a1a' }}>
+            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>💬 Your Feedback</div>
+            {selectedSubmission.coach_feedback ? (
+              <div>
+                <div style={{ fontSize: '14px', color: '#1D9E75', lineHeight: '1.6', marginBottom: '12px', padding: '12px 14px', backgroundColor: 'rgba(29,158,117,0.1)', borderRadius: '10px', border: '1px solid rgba(29,158,117,0.2)' }}>
+                  {selectedSubmission.coach_feedback}
+                </div>
+                <button onClick={() => setFeedbackText(selectedSubmission.coach_feedback)} style={{ fontSize: '12px', color: '#555', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Edit feedback</button>
+              </div>
+            ) : null}
+            {(!selectedSubmission.coach_feedback || feedbackText) && (
+              <div>
+                <textarea
+                  value={feedbackText}
+                  onChange={e => setFeedbackText(e.target.value)}
+                  placeholder="Write feedback for your student..."
+                  style={{ width: '100%', padding: '12px 14px', backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', resize: 'none', minHeight: '100px', fontFamily: 'inherit', marginBottom: '10px' }}
+                />
+                <button
+                  onClick={() => saveFeedback(selectedSubmission.id)}
+                  disabled={savingFeedback || !feedbackText.trim()}
+                  style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1D9E75, #0a5c43)', border: 'none', borderRadius: '12px', color: 'white', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  {savingFeedback ? 'Sending...' : '✓ Send Feedback'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // ── CREATE FORM ───────────────────────────────────────────────
@@ -557,7 +745,6 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
                 <div style={{ fontSize: '15px', fontWeight: '700', color: '#1D9E75' }}>Session submitted!</div>
                 <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>Your coach will review and get back to you</div>
               </div>
-
               {submissionData[noteKey]?.coach_feedback ? (
                 <div style={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '10px' }}>💬 Coach feedback</div>
@@ -590,49 +777,96 @@ function TrainTab({ userId, role, initialProgramme, onClearProgramme }) {
         )}
       </div>
 
-      <div style={{ padding: '0 20px 24px 20px' }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>Loading...</div>
-        ) : programmes.length === 0 ? (
-          <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', border: '1px solid #1a1a1a' }}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🏋️</div>
-            <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>No programmes yet</div>
-            <div style={{ fontSize: '13px', color: '#555' }}>{role === 'coach' ? 'Tap + Create to get started' : 'Your coach will assign one soon'}</div>
+      {/* Coach section tabs */}
+      {role === 'coach' && (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: '14px', padding: '4px' }}>
+            {[
+              { id: 'programmes', label: '📋 Programmes' },
+              { id: 'submissions', label: '📥 Submissions' },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveSection(tab.id)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: activeSection === tab.id ? '#1D9E75' : 'transparent', color: activeSection === tab.id ? 'white' : '#555', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s' }}>
+                {tab.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          programmes.map((prog, i) => {
-            const progSessions = prog.sessions?.length > 0
-              ? prog.sessions
-              : (prog.activities?.length > 0 ? [{ name: 'Session 1', activities: prog.activities }] : [])
-            const displayName = role === 'coach' ? (studentNames[prog.student_email] || prog.student_email) : null
+        </div>
+      )}
 
-            return (
-              <div key={i} onClick={() => setSelectedProg(prog)} style={{ backgroundColor: '#111', borderRadius: '20px', padding: '20px', marginBottom: '12px', border: '1px solid #1a1a1a', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+      <div style={{ padding: '0 20px 24px 20px' }}>
+        {activeSection === 'submissions' && role === 'coach' ? (
+          loadingSubmissions ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>Loading submissions...</div>
+          ) : submissions.length === 0 ? (
+            <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', border: '1px solid #1a1a1a' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>📥</div>
+              <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>No submissions yet</div>
+              <div style={{ fontSize: '13px', color: '#555' }}>Students will appear here once they submit sessions</div>
+            </div>
+          ) : (
+            submissions.map((sub, i) => (
+              <div key={i} onClick={() => { setSelectedSubmission(sub); setFeedbackText('') }} style={{ backgroundColor: '#111', borderRadius: '16px', padding: '18px 20px', marginBottom: '10px', border: `1px solid ${sub.coach_feedback ? 'rgba(29,158,117,0.3)' : '#1a1a1a'}`, cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>{prog.name}</div>
-                    {displayName && <div style={{ fontSize: '12px', color: '#555' }}>👤 {displayName}</div>}
-                    {!displayName && <div style={{ fontSize: '12px', color: '#555' }}>📅 Due {prog.due_date || 'No date'}</div>}
+                    <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '3px' }}>{sub.studentName}</div>
+                    <div style={{ fontSize: '12px', color: '#555' }}>{sub.programmeName} · {sub.sessionName}</div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      {prog.repeat_weekly && <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600' }}>🔁 {prog.repeat_weeks}w</div>}
-                      <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{progSessions.length} sessions</div>
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '10px' }}>
+                    {sub.coach_feedback
+                      ? <span style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600', backgroundColor: 'rgba(29,158,117,0.1)', padding: '3px 8px', borderRadius: '20px' }}>✓ Reviewed</span>
+                      : <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: '600', backgroundColor: 'rgba(245,158,11,0.1)', padding: '3px 8px', borderRadius: '20px' }}>⏳ Pending</span>
+                    }
+                    <div style={{ fontSize: '11px', color: '#444', marginTop: '4px' }}>{timeAgo(sub.created_at)}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {progSessions.slice(0, 4).map((s, si) => (
-                    <span key={si} style={{ padding: '3px 10px', backgroundColor: '#1a1a1a', borderRadius: '20px', fontSize: '11px', color: '#666', fontWeight: '500' }}>{s.name}</span>
-                  ))}
-                  {progSessions.length > 4 && <span style={{ fontSize: '11px', color: '#555' }}>+{progSessions.length - 4} more</span>}
-                </div>
+                {sub.notes && <div style={{ fontSize: '12px', color: '#444', backgroundColor: '#0a0a0a', padding: '8px 10px', borderRadius: '8px', marginTop: '6px', border: '1px solid #1a1a1a' }}>"{sub.notes.length > 80 ? sub.notes.substring(0, 80) + '...' : sub.notes}"</div>}
               </div>
-            )
-          })
+            ))
+          )
+        ) : (
+          loading ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>Loading...</div>
+          ) : programmes.length === 0 ? (
+            <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', border: '1px solid #1a1a1a' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>🏋️</div>
+              <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>No programmes yet</div>
+              <div style={{ fontSize: '13px', color: '#555' }}>{role === 'coach' ? 'Tap + Create to get started' : 'Your coach will assign one soon'}</div>
+            </div>
+          ) : (
+            programmes.map((prog, i) => {
+              const progSessions = prog.sessions?.length > 0
+                ? prog.sessions
+                : (prog.activities?.length > 0 ? [{ name: 'Session 1', activities: prog.activities }] : [])
+              const displayName = role === 'coach' ? (studentNames[prog.student_email] || prog.student_email) : null
+
+              return (
+                <div key={i} onClick={() => setSelectedProg(prog)} style={{ backgroundColor: '#111', borderRadius: '20px', padding: '20px', marginBottom: '12px', border: '1px solid #1a1a1a', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>{prog.name}</div>
+                      {displayName && <div style={{ fontSize: '12px', color: '#555' }}>👤 {displayName}</div>}
+                      {!displayName && <div style={{ fontSize: '12px', color: '#555' }}>📅 Due {prog.due_date || 'No date'}</div>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        {prog.repeat_weekly && <div style={{ fontSize: '11px', color: '#1D9E75', fontWeight: '600' }}>🔁 {prog.repeat_weeks}w</div>}
+                        <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>{progSessions.length} sessions</div>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
+                        <polyline points="9 18 15 12 9 6"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {progSessions.slice(0, 4).map((s, si) => (
+                      <span key={si} style={{ padding: '3px 10px', backgroundColor: '#1a1a1a', borderRadius: '20px', fontSize: '11px', color: '#666', fontWeight: '500' }}>{s.name}</span>
+                    ))}
+                    {progSessions.length > 4 && <span style={{ fontSize: '11px', color: '#555' }}>+{progSessions.length - 4} more</span>}
+                  </div>
+                </div>
+              )
+            })
+          )
         )}
       </div>
     </div>
