@@ -9,8 +9,13 @@ function PlayTab({ userId, role }) {
   const [myAttendance, setMyAttendance] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [createType, setCreateType] = useState('event') // 'event' or 'challenge'
+  const [createType, setCreateType] = useState('event')
   const [profile, setProfile] = useState(null)
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')
+  const [filterSport, setFilterSport] = useState('')
 
   // Event form
   const [eventTitle, setEventTitle] = useState('')
@@ -103,7 +108,6 @@ function PlayTab({ userId, role }) {
       .order('score', { ascending: false })
       .limit(10)
 
-    // Enrich with names
     const enriched = await Promise.all((data || []).map(async (entry, i) => {
       const { data: cp } = await supabase.from('coach_profiles').select('name').eq('id', entry.user_id).single()
       const { data: sp } = await supabase.from('student_profiles').select('name').eq('id', entry.user_id).single()
@@ -116,7 +120,6 @@ function PlayTab({ userId, role }) {
     const { error } = await supabase.from('event_attendees').insert([{ event_id: eventId, user_id: userId }])
     if (error) { alert('Error joining: ' + error.message); return }
     setMyAttendance([...myAttendance, eventId])
-    setEvents(events.map(e => e.id === eventId ? { ...e, attendee_count: (e.attendee_count || 0) + 1 } : e))
   }
 
   async function leaveEvent(eventId) {
@@ -204,6 +207,19 @@ function PlayTab({ userId, role }) {
   const skillColor = { all: '#1D9E75', beginner: '#6366f1', intermediate: '#f59e0b', advanced: '#f43f5e' }
   const typeEmoji = { pickup: '🏃', practice: '🎯', open_session: '⚡' }
   const metricLabel = { sessions: 'Most sessions', activities: 'Most activities', streak: 'Longest streak' }
+
+  // ── Filtering logic ───────────────────────────────────────────
+  const allSports = [...new Set(events.map(e => e.sport).filter(Boolean))]
+
+  const filteredEvents = events.filter(event => {
+    const matchSearch = !searchQuery ||
+      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (event.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (event.sport || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const matchType = filterType === 'all' || event.type === filterType
+    const matchSport = !filterSport || event.sport === filterSport
+    return matchSearch && matchType && matchSport
+  })
 
   // ── EVENT DETAIL ──────────────────────────────────────────────
   if (selectedEvent) {
@@ -323,7 +339,6 @@ function PlayTab({ userId, role }) {
             )}
           </div>
 
-          {/* Leaderboard */}
           <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '24px', border: '1px solid #1a1a1a' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div style={{ fontSize: '15px', fontWeight: '700' }}>🏅 Leaderboard</div>
@@ -361,8 +376,6 @@ function PlayTab({ userId, role }) {
         </div>
 
         <div style={{ padding: '0 20px 100px 20px' }}>
-
-          {/* Toggle event vs challenge */}
           <div style={{ display: 'flex', gap: '4px', backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: '14px', padding: '4px', marginBottom: '16px' }}>
             {[{ id: 'event', label: '📅 Event' }, { id: 'challenge', label: '🏆 Challenge' }].map(opt => (
               <button key={opt.id} onClick={() => setCreateType(opt.id)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: createType === opt.id ? '#1D9E75' : 'transparent', color: createType === opt.id ? 'white' : '#555', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
@@ -373,7 +386,6 @@ function PlayTab({ userId, role }) {
 
           {createType === 'event' ? (
             <div>
-              {/* Event type */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Event type</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -386,13 +398,11 @@ function PlayTab({ userId, role }) {
                 </div>
               </div>
 
-              {/* Title */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Title</label>
                 <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder="e.g. Sunday morning footy" style={{ width: '100%', padding: '12px 14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
               </div>
 
-              {/* Sport */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sport</label>
                 <select value={eventSport} onChange={e => setEventSport(e.target.value)} style={{ width: '100%', padding: '12px 14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', color: eventSport ? 'white' : '#555', fontSize: '14px', outline: 'none' }}>
@@ -401,13 +411,11 @@ function PlayTab({ userId, role }) {
                 </select>
               </div>
 
-              {/* Location */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Location</label>
                 <input value={eventLocation} onChange={e => setEventLocation(e.target.value)} placeholder="e.g. Centennial Park, Sydney" style={{ width: '100%', padding: '12px 14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
               </div>
 
-              {/* Date + time */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</label>
@@ -419,7 +427,6 @@ function PlayTab({ userId, role }) {
                 </div>
               </div>
 
-              {/* Max players + skill */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Max players</label>
@@ -435,13 +442,11 @@ function PlayTab({ userId, role }) {
                 </div>
               </div>
 
-              {/* Notes */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Notes (optional)</label>
                 <textarea value={eventNotes} onChange={e => setEventNotes(e.target.value)} placeholder="Any extra details, what to bring, contact info..." style={{ width: '100%', padding: '12px 14px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none', resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }} />
               </div>
 
-              {/* Public / private toggle */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: '#111', borderRadius: '12px', border: '1px solid #222', marginBottom: '20px' }}>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: '600' }}>Public event</div>
@@ -538,25 +543,92 @@ function PlayTab({ userId, role }) {
           <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>Loading...</div>
         ) : activeSection === 'events' ? (
           <>
-            {/* Sport filter chips */}
-            <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+            {/* Search bar */}
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px' }}>🔍</span>
+              <input
+                type="text"
+                placeholder="Search events by title, location or sport..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{ width: '100%', padding: '12px 14px 12px 40px', backgroundColor: '#111', border: '1px solid #222', borderRadius: '14px', fontSize: '13px', color: 'white', outline: 'none', fontFamily: 'inherit' }}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', fontSize: '16px', cursor: 'pointer', padding: '0' }}>✕</button>
+              )}
+            </div>
+
+            {/* Event type filter chips */}
+            <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '8px', paddingBottom: '4px' }}>
-                {['All', 'pickup', 'practice', 'open_session'].map(f => (
-                  <button key={f} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #222', backgroundColor: 'transparent', color: '#555', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {f === 'All' ? 'All' : f === 'pickup' ? '🏃 Pick-up' : f === 'practice' ? '🎯 Practice' : '⚡ Open session'}
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'pickup', label: '🏃 Pick-up' },
+                  { id: 'practice', label: '🎯 Practice' },
+                  { id: 'open_session', label: '⚡ Open session' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFilterType(f.id)}
+                    style={{
+                      padding: '7px 14px', borderRadius: '20px',
+                      border: `1px solid ${filterType === f.id ? '#1D9E75' : '#222'}`,
+                      backgroundColor: filterType === f.id ? 'rgba(29,158,117,0.15)' : 'transparent',
+                      color: filterType === f.id ? '#1D9E75' : '#555',
+                      fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {f.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {events.length === 0 ? (
+            {/* Sport filter chips — only show if events have sports */}
+            {allSports.length > 0 && (
+              <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '8px', paddingBottom: '4px' }}>
+                  <button
+                    onClick={() => setFilterSport('')}
+                    style={{ padding: '6px 12px', borderRadius: '20px', border: `1px solid ${!filterSport ? '#6366f1' : '#222'}`, backgroundColor: !filterSport ? 'rgba(99,102,241,0.15)' : 'transparent', color: !filterSport ? '#818cf8' : '#555', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    All sports
+                  </button>
+                  {allSports.map(sport => (
+                    <button
+                      key={sport}
+                      onClick={() => setFilterSport(filterSport === sport ? '' : sport)}
+                      style={{ padding: '6px 12px', borderRadius: '20px', border: `1px solid ${filterSport === sport ? '#6366f1' : '#222'}`, backgroundColor: filterSport === sport ? 'rgba(99,102,241,0.15)' : 'transparent', color: filterSport === sport ? '#818cf8' : '#555', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {sport}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Results count */}
+            <div style={{ fontSize: '11px', color: '#555', fontWeight: '600', letterSpacing: '0.5px', marginBottom: '12px' }}>
+              {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
+              {(searchQuery || filterType !== 'all' || filterSport) && (
+                <button onClick={() => { setSearchQuery(''); setFilterType('all'); setFilterSport('') }} style={{ marginLeft: '10px', fontSize: '11px', color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {filteredEvents.length === 0 ? (
               <div style={{ backgroundColor: '#111', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', border: '1px solid #1a1a1a' }}>
-                <div style={{ fontSize: '40px', marginBottom: '12px' }}>🏃</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>No events yet</div>
-                <div style={{ fontSize: '13px', color: '#555' }}>Be the first — create a pick-up game or open session!</div>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
+                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>
+                  {events.length === 0 ? 'No events yet' : 'No events match your filters'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#555' }}>
+                  {events.length === 0 ? 'Be the first — create a pick-up game or open session!' : 'Try adjusting your search or filters'}
+                </div>
               </div>
             ) : (
-              events.map((event, i) => {
+              filteredEvents.map((event, i) => {
                 const isAttending = myAttendance.includes(event.id)
                 return (
                   <div key={i} onClick={() => setSelectedEvent(event)} style={{ backgroundColor: '#111', borderRadius: '20px', padding: '20px', marginBottom: '12px', border: `1px solid ${isAttending ? 'rgba(29,158,117,0.4)' : '#1a1a1a'}`, cursor: 'pointer' }}>
