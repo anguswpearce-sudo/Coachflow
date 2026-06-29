@@ -51,7 +51,6 @@ function MainLayout({ userId, role, onSignOut }) {
       .subscribe()
   }
 
-  // Helper to create a notification from anywhere in the app
   async function createNotification(targetUserId, type, title, body = '', data = {}) {
     await supabase.from('notifications').insert([{
       user_id: targetUserId,
@@ -83,12 +82,12 @@ function MainLayout({ userId, role, onSignOut }) {
 
   function renderTab() {
     switch (activeTab) {
-      case 'home':     return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} />
+      case 'home':     return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} onShowNotifications={() => setShowNotifications(true)} unreadNotifications={unreadCount} />
       case 'discover': return <DiscoverTab userId={userId} role={role} />
       case 'train':    return <TrainTab userId={userId} role={role} initialProgramme={openProgramme} onClearProgramme={() => setOpenProgramme(null)} />
       case 'play':     return <PlayTab userId={userId} role={role} />
       case 'profile':  return <ProfileTab userId={userId} role={role} onSignOut={onSignOut} />
-      default:         return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} />
+      default:         return <HomeTab userId={userId} role={role} onSignOut={onSignOut} onNavigate={setActiveTab} onOpenProgramme={navigateToProgramme} onShowNotifications={() => setShowNotifications(true)} unreadNotifications={unreadCount} />
     }
   }
 
@@ -104,44 +103,6 @@ function MainLayout({ userId, role, onSignOut }) {
       fontFamily: "'DM Sans', sans-serif",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
-      {/* Global notification bell — sits top right over all tabs */}
-      <div style={{
-        position: 'fixed',
-        top: '14px',
-        right: '50%',
-        transform: 'translateX(calc(215px - 52px))',
-        zIndex: 999,
-      }}>
-        <button
-          onClick={() => setShowNotifications(true)}
-          style={{
-            width: '40px', height: '40px', borderRadius: '50%',
-            backgroundColor: '#111',
-            border: '1px solid #222',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', position: 'relative',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-          {unreadCount > 0 && (
-            <div style={{
-              position: 'absolute', top: '-2px', right: '-2px',
-              minWidth: '16px', height: '16px', borderRadius: '8px',
-              backgroundColor: '#f43f5e',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '9px', fontWeight: '800', color: 'white',
-              border: '2px solid #0a0a0a',
-              padding: '0 3px',
-            }}>
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </div>
-          )}
-        </button>
-      </div>
 
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
         {renderTab()}
