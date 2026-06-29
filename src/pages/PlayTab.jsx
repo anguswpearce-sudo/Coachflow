@@ -206,8 +206,14 @@ function PlayTab({ userId, role }) {
 
   const skillColor = { all: '#1D9E75', beginner: '#6366f1', intermediate: '#f59e0b', advanced: '#f43f5e' }
   const typeEmoji = { pickup: '🏃', practice: '🎯', open_session: '⚡' }
-  const metricLabel = { sessions: 'Most sessions', activities: 'Most activities', streak: 'Longest streak' }
-
+ const metricLabel = {
+  sessions: 'Most sessions',
+  activities: 'Most activities',
+  streak: 'Longest streak',
+  strongest_lift: 'Strongest lift',
+  fastest_time: 'Fastest time',
+  hardest_worker: 'Hardest worker',
+}
   // ── Filtering logic ───────────────────────────────────────────
   const allSports = [...new Set(events.map(e => e.sport).filter(Boolean))]
 
